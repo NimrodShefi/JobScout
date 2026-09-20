@@ -1,0 +1,260 @@
+@page "/"
+@rendermode InteractiveServer
+@using JobScout.Web.Jobs
+@using JobScout.Web.Services
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+@inject JobScheduler Scheduler
+@inject Display Fmt
+
+<PageTitle>Dashboard - JobScout</PageTitle>
+
+<h1>Dashboard</h1>
+<p class="page-sub">Everything JobScout knows, at a glance.</p>
+
+@if (_loading)
+{
+    <div class="empty">Loading&hellip;</div>
+}
+else
+{
+    @if (_needsCv)
+    {
+        <div class="alert warn">
+            No CV has been uploaded yet, so nothing can be scored.
+            <a href="/settings">Upload one in Settings</a>.
+        </div>
+    }
+
+    @if (_companiesNeedingUrl > 0)
+    {
+        <div class="alert info">
+            @_companiesNeedingUrl compan@(_companiesNeedingUrl == 1 ? "y is" : "ies are") set to USE but @(_companiesNeedingUrl == 1 ? "has" : "have") no careers URL, so @(_companiesNeedingUrl == 1 ? "it is" : "they are") skipped by the morning scan.
+            <a href="/companies?filter=needs-url">Fix that</a>.
+        </div>
+    }
+
+    @if (_pendingSuggestions > 0)
+    {
+        <div class="alert info">
+            @_pendingSuggestions suggested application update@(_pendingSuggestions == 1 ? "" : "s") from email waiting for you.
+            <a href="/applications">Review</a>.
+        </div>
+    }
+
+    <div class="grid grid-4">
+        <div class="stat">
+            <div class="value">@_newHighScoring</div>
+            <div class="label">Scoring 75+</div>
+        </div>
+        <div class="stat">
+            <div class="value">@_unscored</div>
+            <div class="label">Awaiting score</div>
+        </div>
+        <div class="stat">
+            <div class="value">@_companiesReview</div>
+            <div class="label">Companies to review</div>
+        </div>
+        <div class="stat">
+            <div class="value">@_openApplications</div>
+            <div class="label">Open applications</div>
+        </div>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Top new jobs</h2>
+
+            @if (_topJobs.Count == 0)
+            {
+                <p class="muted small">
+                    Nothing scored yet. Add a company with a careers URL and set it to USE, then run
+                    the morning scan from <a href="/runs">Job runs</a>.
+                </p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:52px">Score</th>
+                                <th>Role</th>
+                                <th>Company</th>
+                                <th>Salary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var job in _topJobs)
+                            {
+                                <tr>
+                                    <td><ScoreBadge Score="job.Score" /></td>
+                                    <td><a href="/jobs/@job.Id">@Display.Truncate(job.Title, 70)</a></td>
+                                    <td class="small">@job.Company</td>
+                                    <td class="small @(job.SalaryKnown ? "" : "muted")">@job.Salary</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small" style="margin-top:10px"><a href="/jobs">All jobs &rarr;</a></p>
+            }
+        </div>
+
+        <div class="card">
+            <h2>Latest runs</h2>
+
+            @if (_recentRuns.Count == 0)
+            {
+                <p class="muted small">No job has run yet. <a href="/runs">Run one now</a>.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Job</th>
+                                <th>When</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var run in _recentRuns)
+                            {
+                                <tr>
+                                    <td class="small">@run.JobName</td>
+                                    <td class="small muted">@Display.Relative(run.StartedAt)</td>
+                                    <td class="small">
+                                        @if (run.FinishedAt is null)
+                                        {
+                                            <span class="badge warn">running</span>
+                                        }
+                                        else if (run.Success)
+                                        {
+                                            <span>@Display.Truncate(run.Summary, 110)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bad">failed</span>
+                                            <span class="muted"> @Display.Truncate(run.Error, 90)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small" style="margin-top:10px"><a href="/runs">All runs &rarr;</a></p>
+            }
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Next scheduled runs</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Job</th>
+                        <th>Cron</th>
+                        <th>Next run (@Scheduler.TimeZone.Id)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var status in _statuses)
+                    {
+                        <tr>
+                            <td>@status.DisplayName</td>
+                            <td class="small muted"><code>@status.Cron</code></td>
+                            <td class="small">
+                                @if (!status.CronValid)
+                                {
+                                    <span class="badge bad">invalid cron</span>
+                                }
+                                else
+                                {
+                                    @Fmt.DateTimeLocal(status.NextRunUtc)
+                                    <span class="muted"> (@Display.Relative(status.NextRunUtc))</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+
+    private int _newHighScoring, _unscored, _companiesReview, _openApplications;
+    private int _companiesNeedingUrl, _pendingSuggestions;
+    private bool _needsCv;
+
+    private List<TopJob> _topJobs = [];
+    private List<JobRunLog> _recentRuns = [];
+    private IReadOnlyList<JobStatus> _statuses = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var config = await db.AppConfigs.AsNoTracking().FirstOrDefaultAsync();
+        _needsCv = string.IsNullOrWhiteSpace(config?.CvText);
+
+        _newHighScoring = await db.JobListings
+            .CountAsync(l => l.Score >= 75 && l.Status == JobListingStatus.Scored);
+
+        _unscored = await db.JobListings
+            .CountAsync(l => l.Score == null && l.Status != JobListingStatus.Dismissed);
+
+        _companiesReview = await db.Companies.CountAsync(c => c.Status == CompanyStatus.REVIEW);
+
+        _companiesNeedingUrl = await db.Companies
+            .CountAsync(c => c.Status == CompanyStatus.USE && (c.Url == null || c.Url == ""));
+
+        var open = new[]
+        {
+            ApplicationStatus.Applied, ApplicationStatus.Acknowledged,
+            ApplicationStatus.Interview, ApplicationStatus.Offer,
+        };
+        _openApplications = await db.Applications.CountAsync(a => open.Contains(a.Status));
+
+        _pendingSuggestions = await db.SuggestedStatusUpdates.CountAsync(s => !s.IsResolved);
+
+        _topJobs = await db.JobListings
+            .AsNoTracking()
+            .Where(l => l.Score != null && l.Status == JobListingStatus.Scored)
+            .OrderByDescending(l => l.Score)
+            .ThenByDescending(l => l.FoundAt)
+            .Take(8)
+            .Select(l => new TopJob(
+                l.Id, l.Title, l.Company!.Name, l.Score,
+                l.SalaryKnown, l.SalaryMin, l.SalaryMax, l.SalaryCurrency))
+            .ToListAsync();
+
+        _recentRuns = await db.JobRunLogs
+            .AsNoTracking()
+            .OrderByDescending(r => r.StartedAt)
+            .Take(8)
+            .ToListAsync();
+
+        _statuses = Scheduler.GetStatuses();
+
+        _loading = false;
+    }
+
+    private sealed record TopJob(
+        int Id, string Title, string Company, int? Score,
+        bool SalaryKnown, decimal? SalaryMin, decimal? SalaryMax, string? SalaryCurrency)
+    {
+        public string Salary => Display.Salary(new JobListing
+        {
+            SalaryKnown = SalaryKnown,
+            SalaryMin = SalaryMin,
+            SalaryMax = SalaryMax,
+            SalaryCurrency = SalaryCurrency,
+        });
+    }
+}

@@ -1,0 +1,21 @@
+@* Renders a 0-100 match score, or a dash when the listing has not been scored yet. *@
+
+@if (Score is null)
+{
+    <span class="muted">&ndash;</span>
+}
+else
+{
+    <span class="score @CssClass">@Score</span>
+}
+
+@code {
+    [Parameter] public int? Score { get; set; }
+
+    private string CssClass => Score switch
+    {
+        >= 75 => "high",
+        >= 50 => "mid",
+        _ => "low",
+    };
+}

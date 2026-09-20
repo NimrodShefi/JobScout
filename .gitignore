@@ -20,8 +20,10 @@ x86/
 bld/
 [Bb]in/
 [Oo]bj/
-[Ll]og/
-[Ll]ogs/
+**/[Ll]og/*
+**/[Ll]ogs/*.log
+!**/[Ll]og/.gitkeep
+!**/[Ll]ogs/.gitkeep
 
 # .NET Core
 project.lock.json
@@ -55,3 +57,13 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Visual Studio
+.vs
+
+# JobScout local state
+/src/JobScout.Web/data/*.db
+/src/JobScout.Web/data/*.db-shm
+/src/JobScout.Web/data/*.db-wal
+/src/JobScout.Web/logs/*.log
+appsettings.Development.json

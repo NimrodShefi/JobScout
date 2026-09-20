@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JobScout.Core/JobScout.Core.csproj" />
+    <Project Path="src/JobScout.Infrastructure/JobScout.Infrastructure.csproj" />
+    <Project Path="src/JobScout.Web/JobScout.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JobScout.Tests/JobScout.Tests.csproj" />
+  </Folder>
+</Solution>

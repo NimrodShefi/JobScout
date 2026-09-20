@@ -1,0 +1,51 @@
+@* One badge style shared by every status enum in the app. *@
+
+<span class="badge @Kind">@Text</span>
+
+@code {
+    [Parameter] public CompanyStatus? Company { get; set; }
+    [Parameter] public JobListingStatus? Listing { get; set; }
+    [Parameter] public ApplicationStatus? Application { get; set; }
+
+    private string Text => Company?.ToString()
+        ?? Listing?.ToString()
+        ?? Application?.ToString()
+        ?? string.Empty;
+
+    private string Kind
+    {
+        get
+        {
+            if (Company is { } c)
+                return c switch
+                {
+                    CompanyStatus.USE => "ok",
+                    CompanyStatus.REVIEW => "warn",
+                    _ => "",
+                };
+
+            if (Listing is { } l)
+                return l switch
+                {
+                    JobListingStatus.Applied => "ok",
+                    JobListingStatus.Scored => "info",
+                    JobListingStatus.Dismissed => "",
+                    _ => "warn",
+                };
+
+            if (Application is { } a)
+                return a switch
+                {
+                    ApplicationStatus.Offer => "ok",
+                    ApplicationStatus.Interview => "ok",
+                    ApplicationStatus.Acknowledged => "info",
+                    ApplicationStatus.Rejected => "bad",
+                    ApplicationStatus.Withdrawn => "",
+                    ApplicationStatus.NoResponse => "",
+                    _ => "warn",
+                };
+
+            return "";
+        }
+    }
+}

@@ -1,0 +1,190 @@
+@page "/industries"
+@rendermode InteractiveServer
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+
+<PageTitle>Industries - JobScout</PageTitle>
+
+<h1>Industries</h1>
+<p class="page-sub">
+    Discovery queries every job board once per active industry, per city. Each one is a search
+    term, so keep them broad ("software engineering") rather than a single job title.
+</p>
+
+@if (_message is not null)
+{
+    <div class="alert ok">@_message</div>
+}
+@if (_error is not null)
+{
+    <div class="alert bad">@_error</div>
+}
+
+<div class="card">
+    <div class="toolbar">
+        <div class="field">
+            <label for="new-industry">Add an industry</label>
+            <input id="new-industry" type="text" style="width:300px"
+                   placeholder="e.g. data engineering"
+                   @bind="_newName" @bind:event="oninput" @onkeydown="OnKeyDown" />
+        </div>
+        <button class="primary" disabled="@string.IsNullOrWhiteSpace(_newName)" @onclick="Add">Add</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="empty">Loading&hellip;</div>
+}
+else if (_industries.Count == 0)
+{
+    <div class="card empty">
+        No industries yet. Add one above and discovery will start looking for it.
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Industry</th>
+                    <th style="width:110px">Active</th>
+                    <th style="width:160px">Added</th>
+                    <th style="width:70px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var industry in _industries)
+                {
+                    <tr>
+                        <td>
+                            <input type="text" style="width:100%" value="@industry.Name"
+                                   @onchange="e => Rename(industry.Id, e)" />
+                        </td>
+                        <td>
+                            <label style="font-weight:400">
+                                <input type="checkbox" checked="@industry.IsActive"
+                                       @onchange="e => Toggle(industry.Id, e)" />
+                                @(industry.IsActive ? "active" : "paused")
+                            </label>
+                        </td>
+                        <td class="small muted">@industry.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
+                        <td>
+                            <button class="danger" @onclick="() => Delete(industry.Id)">Del</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+    private string? _error;
+    private string _newName = string.Empty;
+    private List<Industry> _industries = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _industries = await db.Industries.AsNoTracking().OrderBy(i => i.Name).ToListAsync();
+
+        _loading = false;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newName))
+            await Add();
+    }
+
+    private async Task Add()
+    {
+        _message = _error = null;
+
+        var name = _newName.Trim();
+        if (name.Length == 0) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (await db.Industries.AnyAsync(i => i.Name == name))
+        {
+            _error = $"'{name}' is already on the list.";
+            return;
+        }
+
+        db.Industries.Add(new Industry
+        {
+            Name = name,
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+
+        await db.SaveChangesAsync();
+
+        _message = $"Added '{name}'.";
+        _newName = string.Empty;
+
+        await LoadAsync();
+    }
+
+    private async Task Toggle(int id, ChangeEventArgs e)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var industry = await db.Industries.FirstOrDefaultAsync(i => i.Id == id);
+        if (industry is null) return;
+
+        industry.IsActive = e.Value is true;
+        await db.SaveChangesAsync();
+
+        _message = $"'{industry.Name}' is now {(industry.IsActive ? "active" : "paused")}.";
+        await LoadAsync();
+    }
+
+    private async Task Rename(int id, ChangeEventArgs e)
+    {
+        _message = _error = null;
+
+        var name = e.Value?.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (await db.Industries.AnyAsync(i => i.Name == name && i.Id != id))
+        {
+            _error = $"'{name}' is already on the list.";
+            await LoadAsync();
+            return;
+        }
+
+        var industry = await db.Industries.FirstOrDefaultAsync(i => i.Id == id);
+        if (industry is null) return;
+
+        industry.Name = name;
+        await db.SaveChangesAsync();
+
+        _message = "Renamed.";
+        await LoadAsync();
+    }
+
+    private async Task Delete(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var industry = await db.Industries.FirstOrDefaultAsync(i => i.Id == id);
+        if (industry is null) return;
+
+        db.Industries.Remove(industry);
+        await db.SaveChangesAsync();
+
+        _message = $"Deleted '{industry.Name}'.";
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,332 @@
+@page "/jobs"
+@rendermode InteractiveServer
+@using JobScout.Infrastructure.Services
+@using JobScout.Web.Services
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+@inject ApplicationService Applications
+@inject NavigationManager Nav
+@inject Display Fmt
+
+<PageTitle>Jobs - JobScout</PageTitle>
+
+<h1>Jobs</h1>
+<p class="page-sub">@_total listing@(_total == 1 ? "" : "s") match the filters below.</p>
+
+@if (_message is not null)
+{
+    <div class="alert ok">@_message</div>
+}
+
+<div class="toolbar">
+    <div class="field">
+        <label for="f-search">Search</label>
+        <input id="f-search" type="text" placeholder="title or company"
+               value="@_search" @oninput="OnSearchChanged" />
+    </div>
+
+    <div class="field">
+        <label for="f-company">Company</label>
+        <select id="f-company" value="@_companyId" @onchange="OnCompanyChanged">
+            <option value="">All companies</option>
+            @foreach (var company in _companies)
+            {
+                <option value="@company.Id">@company.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="f-status">Status</label>
+        <select id="f-status" value="@_status" @onchange="OnStatusChanged">
+            <option value="">Any status</option>
+            @foreach (var status in Enum.GetValues<JobListingStatus>())
+            {
+                <option value="@status">@status</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="f-minscore">Min score</label>
+        <input id="f-minscore" type="number" min="0" max="100" style="width:80px"
+               value="@_minScore" @oninput="OnMinScoreChanged" />
+    </div>
+
+    <div class="field">
+        <label>
+            <input type="checkbox" checked="@_salaryUnknownOnly" @onchange="OnSalaryUnknownChanged" />
+            Salary unknown only
+        </label>
+    </div>
+
+    <div class="field">
+        <label>
+            <input type="checkbox" checked="@_unscoredOnly" @onchange="OnUnscoredChanged" />
+            Unscored only
+        </label>
+    </div>
+
+    <button @onclick="ResetFilters">Reset</button>
+</div>
+
+@if (_loading)
+{
+    <div class="empty">Loading&hellip;</div>
+}
+else if (_rows.Count == 0)
+{
+    <div class="card empty">
+        No listings match. Try resetting the filters, or run the morning scan from
+        <a href="/runs">Job runs</a>.
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th class="sortable" style="width:60px" @onclick="@(() => Sort(SortKey.Score))">
+                        Score @SortMark(SortKey.Score)
+                    </th>
+                    <th class="sortable" @onclick="@(() => Sort(SortKey.Title))">Role @SortMark(SortKey.Title)</th>
+                    <th class="sortable" @onclick="@(() => Sort(SortKey.Company))">Company @SortMark(SortKey.Company)</th>
+                    <th>Location</th>
+                    <th class="sortable" @onclick="@(() => Sort(SortKey.Salary))">Salary @SortMark(SortKey.Salary)</th>
+                    <th>Source</th>
+                    <th class="sortable" @onclick="@(() => Sort(SortKey.Found))">Found @SortMark(SortKey.Found)</th>
+                    <th>Status</th>
+                    <th style="width:150px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr>
+                        <td><ScoreBadge Score="row.Score" /></td>
+                        <td><a href="/jobs/@row.Id">@Display.Truncate(row.Title, 80)</a></td>
+                        <td class="small">@row.CompanyName</td>
+                        <td class="small">
+                            @(row.IsRemote ? "Remote" : row.Location ?? "-")
+                        </td>
+                        <td class="small @(row.SalaryKnown ? "" : "muted")">@row.SalaryText</td>
+                        <td class="small muted">@row.Source</td>
+                        <td class="small muted">@Display.Relative(row.FoundAt)</td>
+                        <td><StatusBadge Listing="row.Status" /></td>
+                        <td>
+                            @if (row.Status != JobListingStatus.Applied)
+                            {
+                                <button class="primary" @onclick="() => MarkApplied(row.Id)">Applied</button>
+                            }
+                            @if (row.Status != JobListingStatus.Dismissed)
+                            {
+                                <button @onclick="() => Dismiss(row.Id)">Dismiss</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_total > _rows.Count)
+    {
+        <p class="small muted" style="margin-top:10px">
+            Showing the first @_rows.Count of @_total. Narrow the filters to see the rest.
+        </p>
+    }
+}
+
+@code {
+    private const int PageSize = 200;
+
+    private bool _loading = true;
+    private string? _message;
+
+    private string _search = string.Empty;
+    private string _companyId = string.Empty;
+    private string _status = string.Empty;
+    private string _minScore = string.Empty;
+    private bool _salaryUnknownOnly;
+    private bool _unscoredOnly;
+
+    private SortKey _sortKey = SortKey.Score;
+    private bool _descending = true;
+
+    private int _total;
+    private List<Row> _rows = [];
+    private List<CompanyOption> _companies = [];
+
+    private enum SortKey { Score, Title, Company, Salary, Found }
+
+    /// <summary>Set when arriving from the Companies page via "N jobs".</summary>
+    [SupplyParameterFromQuery(Name = "company")]
+    private int? CompanyFromQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CompanyFromQuery is not null)
+            _companyId = CompanyFromQuery.Value.ToString();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _companies = await db.Companies
+            .AsNoTracking()
+            .OrderBy(c => c.Name)
+            .Select(c => new CompanyOption(c.Id, c.Name))
+            .ToListAsync();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.JobListings.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var term = _search.Trim();
+            query = query.Where(l =>
+                EF.Functions.Like(l.Title, $"%{term}%") ||
+                EF.Functions.Like(l.Company!.Name, $"%{term}%"));
+        }
+
+        if (int.TryParse(_companyId, out var companyId))
+            query = query.Where(l => l.CompanyId == companyId);
+
+        if (Enum.TryParse<JobListingStatus>(_status, out var status))
+            query = query.Where(l => l.Status == status);
+
+        if (int.TryParse(_minScore, out var minScore))
+            query = query.Where(l => l.Score >= minScore);
+
+        if (_salaryUnknownOnly)
+            query = query.Where(l => !l.SalaryKnown);
+
+        if (_unscoredOnly)
+            query = query.Where(l => l.Score == null);
+
+        _total = await query.CountAsync();
+
+        // Nulls last when sorting by score, so unscored rows do not crowd out the good ones.
+        query = (_sortKey, _descending) switch
+        {
+            (SortKey.Score, true) => query.OrderByDescending(l => l.Score ?? -1).ThenByDescending(l => l.FoundAt),
+            (SortKey.Score, false) => query.OrderBy(l => l.Score ?? 101).ThenByDescending(l => l.FoundAt),
+            (SortKey.Title, true) => query.OrderByDescending(l => l.Title),
+            (SortKey.Title, false) => query.OrderBy(l => l.Title),
+            (SortKey.Company, true) => query.OrderByDescending(l => l.Company!.Name).ThenBy(l => l.Title),
+            (SortKey.Company, false) => query.OrderBy(l => l.Company!.Name).ThenBy(l => l.Title),
+            (SortKey.Salary, true) => query.OrderByDescending(l => l.SalaryMax ?? l.SalaryMin ?? -1),
+            (SortKey.Salary, false) => query.OrderBy(l => l.SalaryMax ?? l.SalaryMin ?? decimal.MaxValue),
+            (SortKey.Found, true) => query.OrderByDescending(l => l.FoundAt),
+            _ => query.OrderBy(l => l.FoundAt),
+        };
+
+        _rows = await query
+            .Take(PageSize)
+            .Select(l => new Row(
+                l.Id, l.Title, l.Company!.Name, l.Location, l.IsRemote,
+                l.SalaryKnown, l.SalaryMin, l.SalaryMax, l.SalaryCurrency,
+                l.Source, l.FoundAt, l.Score, l.Status))
+            .ToListAsync();
+
+        _loading = false;
+    }
+
+    private async Task Sort(SortKey key)
+    {
+        if (_sortKey == key) _descending = !_descending;
+        else { _sortKey = key; _descending = key is SortKey.Score or SortKey.Salary or SortKey.Found; }
+
+        await LoadAsync();
+    }
+
+    private MarkupString SortMark(SortKey key) =>
+        new(_sortKey == key ? (_descending ? "&darr;" : "&uarr;") : "");
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task OnCompanyChanged(ChangeEventArgs e)
+    {
+        _companyId = e.Value?.ToString() ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        _status = e.Value?.ToString() ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task OnMinScoreChanged(ChangeEventArgs e)
+    {
+        _minScore = e.Value?.ToString() ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task OnSalaryUnknownChanged(ChangeEventArgs e)
+    {
+        _salaryUnknownOnly = e.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task OnUnscoredChanged(ChangeEventArgs e)
+    {
+        _unscoredOnly = e.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = _companyId = _status = _minScore = string.Empty;
+        _salaryUnknownOnly = _unscoredOnly = false;
+        await LoadAsync();
+    }
+
+    private async Task MarkApplied(int listingId)
+    {
+        var application = await Applications.CreateFromListingAsync(listingId);
+        _message = $"Recorded your application to {application.CompanyName}.";
+        await LoadAsync();
+    }
+
+    private async Task Dismiss(int listingId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var listing = await db.JobListings.FirstOrDefaultAsync(l => l.Id == listingId);
+        if (listing is not null)
+        {
+            listing.Status = JobListingStatus.Dismissed;
+            await db.SaveChangesAsync();
+        }
+
+        _message = "Listing dismissed.";
+        await LoadAsync();
+    }
+
+    private sealed record CompanyOption(int Id, string Name);
+
+    private sealed record Row(
+        int Id, string Title, string CompanyName, string? Location, bool IsRemote,
+        bool SalaryKnown, decimal? SalaryMin, decimal? SalaryMax, string? SalaryCurrency,
+        string Source, DateTimeOffset FoundAt, int? Score, JobListingStatus Status)
+    {
+        public string SalaryText => Display.Salary(new JobListing
+        {
+            SalaryKnown = SalaryKnown,
+            SalaryMin = SalaryMin,
+            SalaryMax = SalaryMax,
+            SalaryCurrency = SalaryCurrency,
+        });
+    }
+}

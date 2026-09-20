@@ -1,0 +1,188 @@
+@page "/runs"
+@rendermode InteractiveServer
+@using JobScout.Web.Services
+@implements IDisposable
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+@inject JobScheduler Scheduler
+@inject Display Fmt
+
+<PageTitle>Job runs - JobScout</PageTitle>
+
+<h1>Job runs</h1>
+<p class="page-sub">
+    Cron times come from configuration and run in @Scheduler.TimeZone.Id. A job that is already
+    running cannot be started again. Detailed diagnostics are in the <code>logs</code> folder.
+</p>
+
+@if (_message is not null)
+{
+    <div class="alert info">@_message</div>
+}
+
+<div class="card">
+    <h2>Jobs</h2>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:150px">Job</th>
+                    <th>What it does</th>
+                    <th style="width:120px">Cron</th>
+                    <th style="width:200px">Next run</th>
+                    <th style="width:110px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var status in _statuses)
+                {
+                    <tr>
+                        <td>
+                            <strong>@status.DisplayName</strong>
+                            @if (status.IsRunning)
+                            {
+                                <br />
+                                <span class="badge warn">running</span>
+                            }
+                        </td>
+                        <td class="small">@status.Description</td>
+                        <td class="small muted"><code>@status.Cron</code></td>
+                        <td class="small">
+                            @if (!status.CronValid)
+                            {
+                                <span class="badge bad">invalid cron</span>
+                            }
+                            else if (status.NextRunUtc is null)
+                            {
+                                <span class="muted">never</span>
+                            }
+                            else
+                            {
+                                @Fmt.DateTimeLocal(status.NextRunUtc)
+                                <br />
+                                <span class="muted">@Display.Relative(status.NextRunUtc)</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="primary" disabled="@status.IsRunning"
+                                    @onclick="() => RunNow(status.Key)">
+                                Run now
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">History</h2>
+        <button @onclick="RefreshAsync">Refresh</button>
+    </div>
+
+    @if (_runs.Count == 0)
+    {
+        <p class="muted small" style="margin-bottom:0">Nothing has run yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap" style="margin-top:12px">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:190px">Job</th>
+                        <th style="width:160px">Started</th>
+                        <th style="width:90px">Took</th>
+                        <th style="width:90px">Result</th>
+                        <th>Summary</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var run in _runs)
+                    {
+                        <tr>
+                            <td class="small">@run.JobName</td>
+                            <td class="small muted">
+                                @Fmt.DateTimeLocal(run.StartedAt)
+                                <br />
+                                <span>@Display.Relative(run.StartedAt)</span>
+                            </td>
+                            <td class="small muted">@Display.Duration(run.Duration)</td>
+                            <td>
+                                @if (run.IsRunning)
+                                {
+                                    <span class="badge warn">running</span>
+                                }
+                                else if (run.Success)
+                                {
+                                    <span class="badge ok">ok</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bad">failed</span>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (run.Success)
+                                {
+                                    @run.Summary
+                                }
+                                else
+                                {
+                                    <span class="muted">@run.Error</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private const int HistorySize = 60;
+
+    private string? _message;
+    private IReadOnlyList<JobStatus> _statuses = [];
+    private List<JobRunLog> _runs = [];
+
+    // Runs happen in the background, so poll while this page is open.
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+
+        _timer = new Timer(
+            _ => InvokeAsync(async () => { await RefreshAsync(); StateHasChanged(); }),
+            null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task RefreshAsync()
+    {
+        _statuses = Scheduler.GetStatuses();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _runs = await db.JobRunLogs
+            .AsNoTracking()
+            .OrderByDescending(r => r.StartedAt)
+            .Take(HistorySize)
+            .ToListAsync();
+    }
+
+    private async Task RunNow(string jobKey)
+    {
+        var started = await Scheduler.RunNowAsync(jobKey);
+
+        _message = started
+            ? "Started. The history below updates as it goes."
+            : "That job is already running - not starting a second copy.";
+
+        await RefreshAsync();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

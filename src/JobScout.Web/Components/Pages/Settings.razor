@@ -1,0 +1,244 @@
+@page "/settings"
+@rendermode InteractiveServer
+@using JobScout.Core.Abstractions
+@using JobScout.Web.Services
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+@inject ICvTextExtractor CvExtractor
+@inject Display Fmt
+@inject ILogger<Settings> Logger
+
+<PageTitle>Settings - JobScout</PageTitle>
+
+<h1>Settings</h1>
+<p class="page-sub">
+    These drive the filters and the scoring. API keys and mailbox credentials are not here -
+    they live in <code>appsettings.json</code> and user secrets, never in the database.
+</p>
+
+@if (_message is not null)
+{
+    <div class="alert ok">@_message</div>
+}
+@if (_error is not null)
+{
+    <div class="alert bad">@_error</div>
+}
+
+@if (_config is null)
+{
+    <div class="empty">Loading&hellip;</div>
+}
+else
+{
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Criteria</h2>
+
+            <div class="field">
+                <label for="min-salary">Minimum salary</label>
+                <input id="min-salary" type="number" min="0" step="1000" style="width:160px"
+                       @bind="_minimumSalary" />
+                <div class="hint">
+                    Listings below this are dropped. Listings with no salary stated are kept and
+                    flagged, never dropped.
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="currency">Currency</label>
+                <select id="currency" @bind="_currency">
+                    <option value="GBP">GBP</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="cities">Cities</label>
+                <textarea id="cities" rows="5" @bind="_cities"
+                          placeholder="One per line, e.g.&#10;London&#10;Manchester"></textarea>
+                <div class="hint">One per line. Leave empty to accept any location.</div>
+            </div>
+
+            <div class="field">
+                <label>
+                    <input type="checkbox" @bind="_includeRemote" />
+                    Include remote roles
+                </label>
+                <div class="hint">When off, anything advertised as remote is filtered out.</div>
+            </div>
+
+            <button class="primary" @onclick="SaveCriteria">Save criteria</button>
+
+            <p class="small muted" style="margin-top:12px; margin-bottom:0">
+                Last saved @Fmt.DateTimeLocal(_config.UpdatedAt)
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>CV</h2>
+
+            @if (string.IsNullOrWhiteSpace(_config.CvText))
+            {
+                <div class="alert warn">
+                    No CV uploaded. Nothing can be scored until one is here.
+                </div>
+            }
+            else
+            {
+                <p class="small">
+                    <strong>@_config.CvFileName</strong>
+                    <span class="muted">
+                        &middot; uploaded @Fmt.DateTimeLocal(_config.CvUploadedAt)
+                        &middot; @_config.CvText!.Length.ToString("N0") characters extracted
+                    </span>
+                </p>
+            }
+
+            <div class="field">
+                <label for="cv-file">Upload a PDF or DOCX</label>
+                <InputFile id="cv-file" OnChange="OnCvSelected" accept=".pdf,.docx" />
+                <div class="hint">
+                    The text is extracted here and shown below so you can check it came out
+                    readable. It is never written to the log files.
+                </div>
+            </div>
+
+            @if (_uploading)
+            {
+                <p class="small">Extracting text&hellip;</p>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_config.CvText))
+            {
+                <div class="field">
+                    <label for="cv-text">Extracted text</label>
+                    <textarea id="cv-text" rows="16" readonly>@_config.CvText</textarea>
+                    <div class="hint">
+                        If this looks garbled, the PDF is probably a scan. Re-export it as a text
+                        PDF or upload the DOCX instead.
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private AppConfig? _config;
+    private string? _message;
+    private string? _error;
+    private bool _uploading;
+
+    private decimal _minimumSalary;
+    private string _currency = "GBP";
+    private string _cities = string.Empty;
+    private bool _includeRemote = true;
+
+    /// <summary>A CV should never be anywhere near this big; the cap keeps a stray upload
+    /// from being read into memory.</summary>
+    private const long MaxCvBytes = 10 * 1024 * 1024;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _config = await db.AppConfigs.AsNoTracking().FirstAsync();
+
+        _minimumSalary = _config.MinimumSalary;
+        _currency = _config.Currency;
+        _cities = string.Join(Environment.NewLine, _config.CityList);
+        _includeRemote = _config.IncludeRemote;
+    }
+
+    private async Task SaveCriteria()
+    {
+        _message = _error = null;
+
+        if (_minimumSalary < 0)
+        {
+            _error = "Minimum salary cannot be negative.";
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var config = await db.AppConfigs.FirstAsync();
+
+        config.MinimumSalary = _minimumSalary;
+        config.Currency = _currency;
+        config.SetCities(_cities.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries));
+        config.IncludeRemote = _includeRemote;
+        config.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync();
+
+        _message = "Criteria saved. They apply from the next run.";
+        await LoadAsync();
+    }
+
+    private async Task OnCvSelected(InputFileChangeEventArgs e)
+    {
+        _message = _error = null;
+
+        var file = e.File;
+        if (file is null) return;
+
+        if (!CvExtractor.CanHandle(file.Name))
+        {
+            _error = $"'{file.Name}' is not supported. Upload a PDF or a DOCX.";
+            return;
+        }
+
+        if (file.Size > MaxCvBytes)
+        {
+            _error = $"That file is {file.Size / 1024 / 1024} MB. The limit is {MaxCvBytes / 1024 / 1024} MB.";
+            return;
+        }
+
+        _uploading = true;
+
+        try
+        {
+            using var stream = file.OpenReadStream(MaxCvBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+
+            buffer.Position = 0;
+            var text = await CvExtractor.ExtractAsync(buffer, file.Name);
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                _error =
+                    "No text could be read from that file. If it is a scanned PDF, it has no text " +
+                    "layer - re-export it or upload the DOCX.";
+                return;
+            }
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var config = await db.AppConfigs.FirstAsync();
+            config.CvFileName = file.Name;
+            config.CvBlob = buffer.ToArray();
+            config.CvText = text;
+            config.CvUploadedAt = DateTimeOffset.UtcNow;
+            config.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            _message = $"CV uploaded. {text.Length:N0} characters extracted - check them below.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            // Message only: the exception could carry document content.
+            Logger.LogError("Reading the uploaded CV failed: {Error}", ex.Message);
+            _error = $"Could not read that file: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+}

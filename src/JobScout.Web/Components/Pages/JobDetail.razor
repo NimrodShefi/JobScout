@@ -1,0 +1,213 @@
+@page "/jobs/{Id:int}"
+@rendermode InteractiveServer
+@using JobScout.Infrastructure.Services
+@using JobScout.Web.Services
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+@inject ApplicationService Applications
+@inject NavigationManager Nav
+@inject Display Fmt
+
+<PageTitle>@(_listing?.Title ?? "Job") - JobScout</PageTitle>
+
+@if (_loading)
+{
+    <div class="empty">Loading&hellip;</div>
+}
+else if (_listing is null)
+{
+    <h1>Job not found</h1>
+    <p class="page-sub">This listing no longer exists. <a href="/jobs">Back to jobs</a>.</p>
+}
+else
+{
+    <p class="small"><a href="/jobs">&larr; All jobs</a></p>
+
+    <h1>@_listing.Title</h1>
+    <p class="page-sub">
+        @_listing.Company?.Name
+        @if (!string.IsNullOrWhiteSpace(_listing.Location))
+        {
+            <span> &middot; @_listing.Location</span>
+        }
+        @if (_listing.IsRemote)
+        {
+            <span class="badge info" style="margin-left:6px">remote</span>
+        }
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="alert ok">@_message</div>
+    }
+
+    <div class="card">
+        <div class="row" style="justify-content:space-between">
+            <div class="row">
+                <div>
+                    <div class="label">Score</div>
+                    <div style="font-size:26px"><ScoreBadge Score="_listing.Score" /></div>
+                </div>
+                <div style="margin-left:24px">
+                    <div class="label">Salary</div>
+                    <div class="@(_listing.SalaryKnown ? "" : "muted")">@Display.Salary(_listing)</div>
+                </div>
+                <div style="margin-left:24px">
+                    <div class="label">Status</div>
+                    <div><StatusBadge Listing="_listing.Status" /></div>
+                </div>
+                <div style="margin-left:24px">
+                    <div class="label">Source</div>
+                    <div class="small">@_listing.Source</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <a class="btn" href="@_listing.Url" target="_blank" rel="noopener noreferrer nofollow">
+                    Open advert &nearr;
+                </a>
+                @if (_listing.Status != JobListingStatus.Applied)
+                {
+                    <button class="primary" @onclick="MarkApplied">I applied</button>
+                }
+                @if (_listing.Status != JobListingStatus.Dismissed)
+                {
+                    <button @onclick="Dismiss">Dismiss</button>
+                }
+            </div>
+        </div>
+
+        <p class="small muted" style="margin-top:12px; margin-bottom:0">
+            Found @Fmt.DateTimeLocal(_listing.FoundAt)
+            @if (_listing.ScoredAt is not null)
+            {
+                <span> &middot; scored @Fmt.DateTimeLocal(_listing.ScoredAt)</span>
+            }
+            @if (!_listing.SalaryKnown)
+            {
+                <span> &middot; salary not stated, so it was kept rather than filtered out</span>
+            }
+        </p>
+    </div>
+
+    @if (_listing.Score is null)
+    {
+        <div class="alert info">
+            Not scored yet.
+            @if (_listing.Company?.Status != CompanyStatus.USE)
+            {
+                <span>
+                    Its company is <StatusBadge Company="_listing.Company!.Status" />, and only USE
+                    companies are scored. <a href="/companies">Change that</a>.
+                </span>
+            }
+            else
+            {
+                <span>It will be scored on the next run, or run the morning scan from <a href="/runs">Job runs</a>.</span>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-2">
+            <div class="card">
+                <h3>Why this score</h3>
+                <p class="prose">@_listing.Reasoning</p>
+            </div>
+
+            <div class="card">
+                <h3>Strengths</h3>
+                @if (_strengths.Count == 0)
+                {
+                    <p class="muted small">None recorded.</p>
+                }
+                else
+                {
+                    <ul class="tight">
+                        @foreach (var item in _strengths)
+                        {
+                            <li>@item</li>
+                        }
+                    </ul>
+                }
+
+                <h3>Gaps</h3>
+                @if (_gaps.Count == 0)
+                {
+                    <p class="muted small">None recorded.</p>
+                }
+                else
+                {
+                    <ul class="tight">
+                        @foreach (var item in _gaps)
+                        {
+                            <li>@item</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <h3>Description</h3>
+        @if (string.IsNullOrWhiteSpace(_listing.Description))
+        {
+            <p class="muted small">No description was captured. Open the advert to read it.</p>
+        }
+        else
+        {
+            <div class="prose small">@_listing.Description</div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private string? _message;
+    private JobListing? _listing;
+    private IReadOnlyList<string> _strengths = [];
+    private IReadOnlyList<string> _gaps = [];
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _listing = await db.JobListings
+            .AsNoTracking()
+            .Include(l => l.Company)
+            .FirstOrDefaultAsync(l => l.Id == Id);
+
+        _strengths = Display.Lines(_listing?.Strengths);
+        _gaps = Display.Lines(_listing?.Gaps);
+
+        _loading = false;
+    }
+
+    private async Task MarkApplied()
+    {
+        var application = await Applications.CreateFromListingAsync(Id);
+        _message = $"Recorded your application to {application.CompanyName}. See it on the Applications page.";
+        await LoadAsync();
+    }
+
+    private async Task Dismiss()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var listing = await db.JobListings.FirstOrDefaultAsync(l => l.Id == Id);
+        if (listing is not null)
+        {
+            listing.Status = JobListingStatus.Dismissed;
+            await db.SaveChangesAsync();
+        }
+
+        _message = "Listing dismissed.";
+        await LoadAsync();
+    }
+}

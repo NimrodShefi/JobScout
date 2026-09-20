@@ -1,0 +1,361 @@
+@page "/applications"
+@rendermode InteractiveServer
+@using JobScout.Infrastructure.Services
+@using JobScout.Web.Services
+@inject IDbContextFactory<JobScoutDbContext> DbFactory
+@inject ApplicationService AppService
+@inject Display Fmt
+
+<PageTitle>Applications - JobScout</PageTitle>
+
+<h1>Applications</h1>
+<p class="page-sub">
+    JobScout never applies for you. These are applications you made; the evening email check
+    keeps their status up to date.
+</p>
+
+@if (_message is not null)
+{
+    <div class="alert ok">@_message</div>
+}
+
+@if (_suggestions.Count > 0)
+{
+    <div class="card">
+        <h2>Suggested updates from email</h2>
+        <p class="small muted">
+            The email check was not confident enough to change these by itself, so it is asking you.
+        </p>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Application</th>
+                        <th>Suggested</th>
+                        <th style="width:90px">Confidence</th>
+                        <th>Because</th>
+                        <th>Email</th>
+                        <th style="width:170px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var suggestion in _suggestions)
+                    {
+                        <tr>
+                            <td class="small">@suggestion.CompanyName &middot; @suggestion.Title</td>
+                            <td><StatusBadge Application="suggestion.SuggestedStatus" /></td>
+                            <td class="small">@suggestion.Confidence.ToString("P0")</td>
+                            <td class="small">@suggestion.Rationale</td>
+                            <td class="small muted">
+                                @suggestion.EmailFrom
+                                <br />
+                                @Display.Truncate(suggestion.EmailSubject, 60)
+                            </td>
+                            <td>
+                                <button class="primary" @onclick="() => Accept(suggestion.Id)">Accept</button>
+                                <button @onclick="() => DismissSuggestion(suggestion.Id)">Dismiss</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <h3>Log an application made elsewhere</h3>
+    <div class="toolbar">
+        <div class="field">
+            <label for="m-company">Company</label>
+            <input id="m-company" type="text" style="width:200px" @bind="_newCompany" @bind:event="oninput" />
+        </div>
+        <div class="field">
+            <label for="m-title">Role</label>
+            <input id="m-title" type="text" style="width:260px" @bind="_newTitle" @bind:event="oninput" />
+        </div>
+        <div class="field">
+            <label for="m-date">Applied on</label>
+            <input id="m-date" type="date" @bind="_newDate" />
+        </div>
+        <button class="primary" disabled="@(!CanAddManual)" @onclick="AddManual">Add</button>
+    </div>
+</div>
+
+<div class="toolbar">
+    <div class="field">
+        <label for="f-status">Status</label>
+        <select id="f-status" value="@_filterStatus" @onchange="OnFilterChanged">
+            <option value="">All</option>
+            <option value="open">Open only</option>
+            @foreach (var status in Enum.GetValues<ApplicationStatus>())
+            {
+                <option value="@status">@status</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="empty">Loading&hellip;</div>
+}
+else if (_rows.Count == 0)
+{
+    <div class="card empty">
+        No applications yet. Mark a job as applied from the <a href="/jobs">Jobs</a> page,
+        or log one above.
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th style="width:150px">Status</th>
+                    <th style="width:120px">Applied</th>
+                    <th style="width:130px">Last email</th>
+                    <th>Notes</th>
+                    <th style="width:90px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    <tr>
+                        <td>@row.CompanyName</td>
+                        <td class="small">
+                            @if (row.JobListingId is not null)
+                            {
+                                <a href="/jobs/@row.JobListingId">@row.Title</a>
+                            }
+                            else
+                            {
+                                @row.Title
+                            }
+                        </td>
+                        <td>
+                            <select value="@row.Status" @onchange="e => ChangeStatus(row.Id, e)">
+                                @foreach (var status in Enum.GetValues<ApplicationStatus>())
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </select>
+                        </td>
+                        <td class="small muted">@Fmt.DateLocal(row.AppliedAt)</td>
+                        <td class="small muted">@Display.Relative(row.LastEmailAt)</td>
+                        <td>
+                            <input type="text" style="width:100%" value="@row.Notes"
+                                   placeholder="notes"
+                                   @onchange="e => SaveNotes(row.Id, e)" />
+                        </td>
+                        <td>
+                            <button @onclick="() => ToggleHistory(row.Id)">
+                                @(_expanded == row.Id ? "Hide" : "History")
+                            </button>
+                        </td>
+                    </tr>
+
+                    @if (_expanded == row.Id)
+                    {
+                        <tr>
+                            <td colspan="7" style="background:#fafbfc">
+                                <strong class="small">Status history</strong>
+                                @if (_history.Count == 0)
+                                {
+                                    <p class="muted small">Nothing recorded.</p>
+                                }
+                                else
+                                {
+                                    <table style="margin-top:6px; background:transparent">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:170px">When</th>
+                                                <th style="width:200px">Change</th>
+                                                <th style="width:170px">Source</th>
+                                                <th>Note</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var change in _history)
+                                            {
+                                                <tr>
+                                                    <td class="small muted">@Fmt.DateTimeLocal(change.ChangedAt)</td>
+                                                    <td class="small">
+                                                        @(change.FromStatus?.ToString() ?? "created") &rarr; @change.ToStatus
+                                                    </td>
+                                                    <td class="small muted">@Readable(change.Source)</td>
+                                                    <td class="small">@change.Note</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _message;
+
+    private string _filterStatus = "open";
+
+    private string _newCompany = string.Empty;
+    private string _newTitle = string.Empty;
+    private DateTime _newDate = DateTime.Today;
+
+    private int? _expanded;
+
+    private List<Row> _rows = [];
+    private List<ApplicationStatusChange> _history = [];
+    private List<Suggestion> _suggestions = [];
+
+    private bool CanAddManual =>
+        !string.IsNullOrWhiteSpace(_newCompany) && !string.IsNullOrWhiteSpace(_newTitle);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.Applications.AsNoTracking().AsQueryable();
+
+        if (_filterStatus == "open")
+        {
+            var open = new[]
+            {
+                ApplicationStatus.Applied, ApplicationStatus.Acknowledged,
+                ApplicationStatus.Interview, ApplicationStatus.Offer,
+            };
+            query = query.Where(a => open.Contains(a.Status));
+        }
+        else if (Enum.TryParse<ApplicationStatus>(_filterStatus, out var status))
+        {
+            query = query.Where(a => a.Status == status);
+        }
+
+        _rows = await query
+            .OrderByDescending(a => a.AppliedAt)
+            .Select(a => new Row(
+                a.Id, a.JobListingId, a.CompanyName, a.Title,
+                a.Status, a.AppliedAt, a.LastEmailAt, a.Notes))
+            .ToListAsync();
+
+        _suggestions = await db.SuggestedStatusUpdates
+            .AsNoTracking()
+            .Where(s => !s.IsResolved)
+            .OrderByDescending(s => s.CreatedAt)
+            .Select(s => new Suggestion(
+                s.Id, s.JobApplication!.CompanyName, s.JobApplication.Title,
+                s.SuggestedStatus, s.Confidence, s.Rationale, s.EmailFrom, s.EmailSubject))
+            .ToListAsync();
+
+        if (_expanded is not null)
+            await LoadHistoryAsync(_expanded.Value);
+
+        _loading = false;
+    }
+
+    private async Task LoadHistoryAsync(int applicationId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _history = await db.ApplicationStatusChanges
+            .AsNoTracking()
+            .Where(h => h.JobApplicationId == applicationId)
+            .OrderByDescending(h => h.ChangedAt)
+            .ToListAsync();
+    }
+
+    private async Task ToggleHistory(int applicationId)
+    {
+        if (_expanded == applicationId)
+        {
+            _expanded = null;
+            _history = [];
+            return;
+        }
+
+        _expanded = applicationId;
+        await LoadHistoryAsync(applicationId);
+    }
+
+    private async Task OnFilterChanged(ChangeEventArgs e)
+    {
+        _filterStatus = e.Value?.ToString() ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task ChangeStatus(int applicationId, ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ApplicationStatus>(e.Value?.ToString(), out var status)) return;
+
+        await AppService.ChangeStatusAsync(applicationId, status, note: "Changed by hand");
+
+        _message = $"Status set to {status}.";
+        await LoadAsync();
+    }
+
+    private async Task SaveNotes(int applicationId, ChangeEventArgs e)
+    {
+        await AppService.UpdateNotesAsync(applicationId, e.Value?.ToString());
+        _message = "Notes saved.";
+        await LoadAsync();
+    }
+
+    private async Task AddManual()
+    {
+        var applied = new DateTimeOffset(DateTime.SpecifyKind(_newDate, DateTimeKind.Utc));
+
+        await AppService.CreateManualAsync(_newCompany, _newTitle, applied, null);
+
+        _message = $"Logged your application to {_newCompany.Trim()}.";
+        _newCompany = _newTitle = string.Empty;
+        _newDate = DateTime.Today;
+
+        await LoadAsync();
+    }
+
+    private async Task Accept(int suggestionId)
+    {
+        await AppService.AcceptSuggestionAsync(suggestionId);
+        _message = "Suggestion accepted and the status updated.";
+        await LoadAsync();
+    }
+
+    private async Task DismissSuggestion(int suggestionId)
+    {
+        await AppService.DismissSuggestionAsync(suggestionId);
+        _message = "Suggestion dismissed. The status was left alone.";
+        await LoadAsync();
+    }
+
+    private static string Readable(StatusChangeSource source) => source switch
+    {
+        StatusChangeSource.Manual => "you",
+        StatusChangeSource.EmailAutomatic => "email (automatic)",
+        StatusChangeSource.EmailSuggestionAccepted => "email (you confirmed)",
+        _ => source.ToString(),
+    };
+
+    private sealed record Row(
+        int Id, int? JobListingId, string CompanyName, string Title,
+        ApplicationStatus Status, DateTimeOffset AppliedAt, DateTimeOffset? LastEmailAt, string? Notes);
+
+    private sealed record Suggestion(
+        int Id, string CompanyName, string Title, ApplicationStatus SuggestedStatus,
+        double Confidence, string? Rationale, string? EmailFrom, string? EmailSubject);
+}
