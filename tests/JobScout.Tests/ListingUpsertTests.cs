@@ -245,6 +245,63 @@ public class ListingUpsertTests : IDisposable
         Assert.False(unknown.SalaryKnown);
     }
 
+    [Fact]
+    public async Task Excluded_roles_never_reach_the_database_so_they_never_cost_a_score()
+    {
+        var companyId = await AddCompanyAsync("Acme");
+
+        var criteria = new MatchCriteria
+        {
+            DesiredRoles = [".NET developer"],
+            ExcludedRoles = ["senior"],
+        };
+
+        var outcome = await _service.UpsertForCompanyAsync(companyId, "CareerPage",
+        [
+            Job(".NET Developer", "https://acme.test/1"),
+            Job("Senior .NET Developer", "https://acme.test/2"),
+            Job("Mortgage Adviser", "https://acme.test/3"),
+        ], criteria);
+
+        Assert.Equal(1, outcome.Inserted);
+        Assert.Equal(1, outcome.RejectedExcludedRole);
+        Assert.Equal(1, outcome.RejectedUnwantedRole);
+        Assert.Equal(2, outcome.RejectedTotal);
+
+        await using var db = _db.CreateDbContext();
+        Assert.Equal(".NET Developer", (await db.JobListings.SingleAsync()).Title);
+    }
+
+    [Fact]
+    public async Task With_no_role_rules_configured_every_title_is_still_saved()
+    {
+        var companyId = await AddCompanyAsync("Acme");
+
+        var outcome = await _service.UpsertForCompanyAsync(companyId, "CareerPage",
+        [
+            Job("Senior .NET Developer", "https://acme.test/1"),
+            Job("Mortgage Adviser", "https://acme.test/2"),
+        ], AnyLocationAnySalary);
+
+        Assert.Equal(2, outcome.Inserted);
+        Assert.Equal(0, outcome.RejectedTotal);
+    }
+
+    [Fact]
+    public async Task Role_rules_apply_to_board_results_too()
+    {
+        var criteria = new MatchCriteria { ExcludedRoles = ["senior"] };
+
+        var (listings, _) = await _service.UpsertBoardResultsAsync("Adzuna",
+        [
+            new BoardJobResult { CompanyName = "Globex", Title = "Senior Engineer", Url = "https://b.test/1" },
+            new BoardJobResult { CompanyName = "Globex", Title = "Engineer", Url = "https://b.test/2" },
+        ], criteria);
+
+        Assert.Equal(1, listings.Inserted);
+        Assert.Equal(1, listings.RejectedExcludedRole);
+    }
+
     // ---- board discovery -------------------------------------------------
 
     [Fact]

@@ -177,6 +177,8 @@ public sealed class ScoringService(
         Currency = config.Currency,
         Cities = config.CityList,
         IncludeRemote = config.IncludeRemote,
+        DesiredRoles = config.DesiredRoleList,
+        ExcludedRoles = config.ExcludedRoleList,
     };
 
     private async Task<List<PendingListing>> LoadPendingAsync(int? onlyCompanyId, int cap, CancellationToken ct)

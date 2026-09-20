@@ -80,7 +80,8 @@ created on first run, and migrations are applied automatically.
 
 1. **Settings** → upload your CV (PDF or DOCX). Check the extracted text looks readable —
    nothing can be scored without it.
-2. **Settings** → set your minimum salary, cities and whether remote is acceptable.
+2. **Settings** → set your minimum salary, cities, whether remote is acceptable, and the
+   roles you want or want excluded.
 3. **Companies** → add a company with its careers page URL and set it to `USE`.
 4. **Job runs** → *Run now* on the morning scan.
 5. **Industries** → add a few search terms, then *Run now* on discovery to find more
@@ -104,6 +105,50 @@ Environment variables work too, with `__` for `:` —
 Precedence, lowest to highest: `appsettings.json` → `appsettings.{Environment}.json` →
 user secrets → environment variables → command line. So an environment variable always
 overrides a stored secret, which is what makes one-off runs easy to test.
+
+### Search criteria (the Settings page)
+
+These live in the database, not in a config file, because they change often and are edited
+in the app. They are the single `AppConfig` row behind **Settings**.
+
+| Setting | What it does |
+|---|---|
+| **Minimum salary** | Listings whose top-of-range falls below this are dropped. A listing with no salary stated is **kept and flagged**, never dropped. |
+| **Currency** | The currency the minimum is expressed in, and the default stamped on listings. |
+| **Cities** | One per line. A listing must mention one of them. Empty means anywhere. |
+| **Include remote** | When off, anything advertised as remote is dropped even if it also names one of your cities. |
+| **Roles I want** | One per line, e.g. `.NET developer`. Empty means every title is in scope. When set, a title matching none of them is dropped **before it costs anything to score**. |
+| **Roles to exclude** | One per line, e.g. `senior`. Any title containing one of these words is dropped. |
+| **CV** | PDF or DOCX. The extracted text is shown so you can check it came out readable, and is what every score is judged against. |
+
+#### How role matching works
+
+Both role lists match on **whole words, with punctuation folded away**, which avoids the two
+mistakes a plain substring match would make:
+
+- `.NET developer` matches `.NET Developer`, `Senior .Net Developer` and
+  `Graduate .NET Developer (12 month FTC)` — you do not have to guess the site's spelling.
+- `lead` matches `Tech Lead, Payments` but **not** `Leadership Development Programme`.
+
+Word order is significant, so `.NET developer` does not match `Developer - .NET`. If a site
+words its titles that way, add the variant as its own line.
+
+**An exclusion always beats a wanted role.** With `.NET developer` wanted and `senior`
+excluded, `Senior .NET Developer` is dropped. That is the point of the pair: describe the
+shape of the job you want, then subtract the seniorities you do not.
+
+Two things worth knowing:
+
+- **These are hard filters, applied before the AI sees anything.** That is deliberate — it
+  is what stops you paying to score roles you were never going to take. The trade-off is
+  that a title you did not anticipate is dropped silently: `.NET developer` will not match
+  `Backend Engineer (C#)`. Keep the wanted list broad, or leave it empty and let the score
+  do the sorting.
+- **Both lists are also given to the AI**, so the score reflects your preferences even for
+  listings that pass the filter.
+
+The Settings page has a box to try a job title against the rules and see what would happen
+to it, so you can check the lists without waiting for a run.
 
 ### Fail-fast configuration
 

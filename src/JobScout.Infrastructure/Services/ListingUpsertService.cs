@@ -16,8 +16,14 @@ public sealed record UpsertOutcome
     public int Duplicates { get; init; }
     public int RejectedLocation { get; init; }
     public int RejectedSalary { get; init; }
+    public int RejectedExcludedRole { get; init; }
+    public int RejectedUnwantedRole { get; init; }
 
-    public int Considered => Inserted + Updated + Duplicates + RejectedLocation + RejectedSalary;
+    /// <summary>Everything dropped by a rule rather than saved.</summary>
+    public int RejectedTotal =>
+        RejectedLocation + RejectedSalary + RejectedExcludedRole + RejectedUnwantedRole;
+
+    public int Considered => Inserted + Updated + Duplicates + RejectedTotal;
 
     public static UpsertOutcome operator +(UpsertOutcome a, UpsertOutcome b) => new()
     {
@@ -26,6 +32,8 @@ public sealed record UpsertOutcome
         Duplicates = a.Duplicates + b.Duplicates,
         RejectedLocation = a.RejectedLocation + b.RejectedLocation,
         RejectedSalary = a.RejectedSalary + b.RejectedSalary,
+        RejectedExcludedRole = a.RejectedExcludedRole + b.RejectedExcludedRole,
+        RejectedUnwantedRole = a.RejectedUnwantedRole + b.RejectedUnwantedRole,
     };
 }
 
@@ -155,6 +163,8 @@ public sealed class ListingUpsertService(
         var duplicates = 0;
         var rejectedLocation = 0;
         var rejectedSalary = 0;
+        var rejectedExcludedRole = 0;
+        var rejectedUnwantedRole = 0;
 
         // Dedupe within the batch first - a careers page often lists the same advert twice.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -176,7 +186,23 @@ public sealed class ListingUpsertService(
                 continue;
             }
 
-            var outcome = ListingFilter.Evaluate(c.Location, c.IsRemote, c.SalaryMin, c.SalaryMax, criteria);
+            var outcome = ListingFilter.Evaluate(
+                c.Title, c.Location, c.IsRemote, c.SalaryMin, c.SalaryMax, criteria);
+
+            if (outcome == FilterOutcome.RejectedExcludedRole)
+            {
+                logger.LogDebug("Dropped '{Title}': matched the excluded role term '{Term}'",
+                    c.Title, RoleMatcher.FirstMatch(c.Title, criteria.ExcludedRoles));
+                rejectedExcludedRole++;
+                continue;
+            }
+
+            if (outcome == FilterOutcome.RejectedUnwantedRole)
+            {
+                logger.LogDebug("Dropped '{Title}': matches none of the roles I am looking for", c.Title);
+                rejectedUnwantedRole++;
+                continue;
+            }
 
             if (outcome == FilterOutcome.RejectedLocation) { rejectedLocation++; continue; }
             if (outcome == FilterOutcome.RejectedSalary) { rejectedSalary++; continue; }
@@ -225,6 +251,8 @@ public sealed class ListingUpsertService(
             Duplicates = duplicates,
             RejectedLocation = rejectedLocation,
             RejectedSalary = rejectedSalary,
+            RejectedExcludedRole = rejectedExcludedRole,
+            RejectedUnwantedRole = rejectedUnwantedRole,
         };
     }
 

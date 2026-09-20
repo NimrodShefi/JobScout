@@ -84,7 +84,7 @@ public sealed class MorningScanJob(
             logger.LogInformation(
                 "{Company}: {Extracted} advert(s) found, {Inserted} new, {Updated} updated, {Rejected} filtered out",
                 company.Name, extracted.Count, outcome.Inserted, outcome.Updated,
-                outcome.RejectedLocation + outcome.RejectedSalary);
+                outcome.RejectedTotal);
         }
 
         // Score everything pending, board-sourced listings included.
@@ -118,9 +118,8 @@ public sealed class MorningScanJob(
 
         sb.Append($"; {totals.Inserted} new listing(s), {totals.Updated} updated");
 
-        var filtered = totals.RejectedLocation + totals.RejectedSalary;
-        if (filtered > 0)
-            sb.Append($", {filtered} filtered out ({totals.RejectedLocation} location, {totals.RejectedSalary} salary)");
+        if (totals.RejectedTotal > 0)
+            sb.Append($", {totals.RejectedTotal} filtered out ({RejectionSummary.Describe(totals)})");
 
         sb.Append($"; {scored.Scored} scored");
 

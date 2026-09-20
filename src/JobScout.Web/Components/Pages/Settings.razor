@@ -1,6 +1,7 @@
 @page "/settings"
 @rendermode InteractiveServer
 @using JobScout.Core.Abstractions
+@using JobScout.Core.Services
 @using JobScout.Web.Services
 @inject IDbContextFactory<JobScoutDbContext> DbFactory
 @inject ICvTextExtractor CvExtractor
@@ -66,6 +67,42 @@ else
                     Include remote roles
                 </label>
                 <div class="hint">When off, anything advertised as remote is filtered out.</div>
+            </div>
+
+            <div class="field">
+                <label for="desired-roles">Roles I want</label>
+                <textarea id="desired-roles" rows="4" @bind="_desiredRoles"
+                          placeholder="One per line, e.g.&#10;.NET developer&#10;backend engineer"></textarea>
+                <div class="hint">
+                    One per line. Leave empty to consider every title. When set, a listing whose
+                    title matches none of these is dropped before it costs anything to score.
+                    Matching is on whole words and ignores punctuation, so &quot;.NET developer&quot;
+                    also matches &quot;Developer - .Net&quot;.
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="excluded-roles">Roles to exclude</label>
+                <textarea id="excluded-roles" rows="4" @bind="_excludedRoles"
+                          placeholder="One per line, e.g.&#10;senior&#10;principal&#10;manager"></textarea>
+                <div class="hint">
+                    One per line. Any title containing one of these words is dropped, even if it
+                    also matches a role you want &mdash; so &quot;senior&quot; still excludes
+                    &quot;Senior .NET Developer&quot;.
+                </div>
+            </div>
+
+            @if (_rolePreview is not null)
+            {
+                <div class="alert @(_rolePreviewKept ? "ok" : "warn")">@_rolePreview</div>
+            }
+
+            <div class="field">
+                <label for="role-test">Try a job title against these rules</label>
+                <input id="role-test" type="text" style="width:100%"
+                       placeholder="e.g. Senior .NET Developer"
+                       value="@_roleTest" @oninput="OnRoleTestChanged" />
+                <div class="hint">Nothing is saved by this - it just shows what the filter would do.</div>
             </div>
 
             <button class="primary" @onclick="SaveCriteria">Save criteria</button>
@@ -134,6 +171,12 @@ else
     private string _currency = "GBP";
     private string _cities = string.Empty;
     private bool _includeRemote = true;
+    private string _desiredRoles = string.Empty;
+    private string _excludedRoles = string.Empty;
+
+    private string _roleTest = string.Empty;
+    private string? _rolePreview;
+    private bool _rolePreviewKept;
 
     /// <summary>A CV should never be anywhere near this big; the cap keeps a stray upload
     /// from being read into memory.</summary>
@@ -150,7 +193,56 @@ else
         _currency = _config.Currency;
         _cities = string.Join(Environment.NewLine, _config.CityList);
         _includeRemote = _config.IncludeRemote;
+        _desiredRoles = string.Join(Environment.NewLine, _config.DesiredRoleList);
+        _excludedRoles = string.Join(Environment.NewLine, _config.ExcludedRoleList);
+
+        UpdateRolePreview();
     }
+
+    private void OnRoleTestChanged(ChangeEventArgs e)
+    {
+        _roleTest = e.Value?.ToString() ?? string.Empty;
+        UpdateRolePreview();
+    }
+
+    /// <summary>Runs the real filter against the sample title, so the rules can be checked
+    /// before a run depends on them.</summary>
+    private void UpdateRolePreview()
+    {
+        if (string.IsNullOrWhiteSpace(_roleTest))
+        {
+            _rolePreview = null;
+            return;
+        }
+
+        var criteria = new MatchCriteria
+        {
+            DesiredRoles = Lines(_desiredRoles),
+            ExcludedRoles = Lines(_excludedRoles),
+        };
+
+        var outcome = ListingFilter.EvaluateTitle(_roleTest, criteria);
+        _rolePreviewKept = outcome == FilterOutcome.Keep;
+
+        _rolePreview = outcome switch
+        {
+            FilterOutcome.Keep when criteria.DesiredRoles.Count == 0 =>
+                $"\"{_roleTest.Trim()}\" would be kept - no wanted roles are configured, so every title is in scope.",
+
+            FilterOutcome.Keep =>
+                $"\"{_roleTest.Trim()}\" would be kept - it matches \"{RoleMatcher.FirstMatch(_roleTest, criteria.DesiredRoles)}\".",
+
+            FilterOutcome.RejectedExcludedRole =>
+                $"\"{_roleTest.Trim()}\" would be dropped - it contains the excluded word \"{RoleMatcher.FirstMatch(_roleTest, criteria.ExcludedRoles)}\".",
+
+            _ =>
+                $"\"{_roleTest.Trim()}\" would be dropped - it matches none of the roles you want.",
+        };
+    }
+
+    private static List<string> Lines(string value) =>
+        value.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+             .ToList();
 
     private async Task SaveCriteria()
     {

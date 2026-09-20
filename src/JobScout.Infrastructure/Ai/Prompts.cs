@@ -21,6 +21,10 @@ internal static class Prompts
           "is_remote": <true|false>
         }
 
+        The candidate criteria may name roles they want and roles they have ruled out. Weigh a
+        title that matches what they want upwards, and one they have ruled out downwards, but
+        judge the whole advert rather than the title alone.
+
         Scoring guide:
           85-100  strong match: the candidate clearly meets the core requirements
           65-84   good match with one or two gaps

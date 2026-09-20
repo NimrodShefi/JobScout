@@ -16,6 +16,15 @@ public class AppConfig
 
     public bool IncludeRemote { get; set; } = true;
 
+    /// <summary>Role titles I am actively looking for, newline-separated, e.g. ".NET developer".
+    /// When empty, every title is in scope; when set, a listing whose title matches none of
+    /// them is dropped before it costs anything to score.</summary>
+    public string DesiredRoles { get; set; } = string.Empty;
+
+    /// <summary>Words or phrases that rule a role out, newline-separated, e.g. "senior".
+    /// An exclusion always beats a match in <see cref="DesiredRoles"/>.</summary>
+    public string ExcludedRoles { get; set; } = string.Empty;
+
     public string? CvFileName { get; set; }
     public byte[]? CvBlob { get; set; }
 
@@ -27,9 +36,23 @@ public class AppConfig
 
     public DateTimeOffset UpdatedAt { get; set; }
 
-    public IReadOnlyList<string> CityList =>
-        Cities.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    public IReadOnlyList<string> CityList => SplitLines(Cities);
 
-    public void SetCities(IEnumerable<string> cities) =>
-        Cities = string.Join('\n', cities.Select(c => c.Trim()).Where(c => c.Length > 0));
+    public IReadOnlyList<string> DesiredRoleList => SplitLines(DesiredRoles);
+
+    public IReadOnlyList<string> ExcludedRoleList => SplitLines(ExcludedRoles);
+
+    public void SetCities(IEnumerable<string> cities) => Cities = JoinLines(cities);
+
+    public void SetDesiredRoles(IEnumerable<string> roles) => DesiredRoles = JoinLines(roles);
+
+    public void SetExcludedRoles(IEnumerable<string> roles) => ExcludedRoles = JoinLines(roles);
+
+    private static IReadOnlyList<string> SplitLines(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string JoinLines(IEnumerable<string> values) =>
+        string.Join('\n', values.Select(v => v.Trim()).Where(v => v.Length > 0));
 }

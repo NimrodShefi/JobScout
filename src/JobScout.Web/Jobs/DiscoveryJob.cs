@@ -69,20 +69,18 @@ public sealed class DiscoveryJob(
                         "{Companies} new company(ies), {Filtered} filtered out",
                         board.Name, industry, city ?? "anywhere", results.Count,
                         listings.Inserted, created,
-                        listings.RejectedLocation + listings.RejectedSalary);
+                        listings.RejectedTotal);
                 }
             }
         }
-
-        var filtered = totals.RejectedLocation + totals.RejectedSalary;
 
         var summary =
             $"{queries} board quer{(queries == 1 ? "y" : "ies")} across {enabled.Count} board(s); " +
             $"{newCompanies} new company(ies) awaiting review, " +
             $"{totals.Inserted} new listing(s), {totals.Updated} updated";
 
-        if (filtered > 0)
-            summary += $", {filtered} filtered out ({totals.RejectedLocation} location, {totals.RejectedSalary} salary)";
+        if (totals.RejectedTotal > 0)
+            summary += $", {totals.RejectedTotal} filtered out ({RejectionSummary.Describe(totals)})";
 
         summary += ". Listings are not scored until their company is set to USE.";
 

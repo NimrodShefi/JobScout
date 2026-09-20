@@ -33,6 +33,8 @@ public sealed class AiJobMatcher(
             .AppendLine($"Minimum salary: {criteria.MinimumSalary:0} {criteria.Currency}")
             .AppendLine($"Target locations: {(criteria.Cities.Count == 0 ? "any" : string.Join(", ", criteria.Cities))}")
             .AppendLine($"Open to remote: {(criteria.IncludeRemote ? "yes" : "no")}")
+            .AppendLine($"Roles wanted: {(criteria.DesiredRoles.Count == 0 ? "no preference stated" : string.Join(", ", criteria.DesiredRoles))}")
+            .AppendLine($"Roles ruled out: {(criteria.ExcludedRoles.Count == 0 ? "none" : string.Join(", ", criteria.ExcludedRoles))}")
             .AppendLine()
             .AppendLine("## Job advert")
             .AppendLine($"Title: {jobTitle}")

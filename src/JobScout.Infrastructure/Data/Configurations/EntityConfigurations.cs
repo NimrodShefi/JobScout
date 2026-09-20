@@ -126,6 +126,8 @@ public class AppConfigConfiguration : IEntityTypeConfiguration<AppConfig>
         e.Property(x => x.CvFileName).HasMaxLength(300);
 
         e.Ignore(x => x.CityList);
+        e.Ignore(x => x.DesiredRoleList);
+        e.Ignore(x => x.ExcludedRoleList);
     }
 }
 

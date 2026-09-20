@@ -7,6 +7,12 @@ public sealed record MatchCriteria
     public string Currency { get; init; } = "GBP";
     public IReadOnlyList<string> Cities { get; init; } = [];
     public bool IncludeRemote { get; init; } = true;
+
+    /// <summary>Titles I am looking for. Empty means every title is in scope.</summary>
+    public IReadOnlyList<string> DesiredRoles { get; init; } = [];
+
+    /// <summary>Words that rule a title out. Always beats <see cref="DesiredRoles"/>.</summary>
+    public IReadOnlyList<string> ExcludedRoles { get; init; } = [];
 }
 
 /// <summary>What the AI must return for a scored job. Validated before use.</summary>
