@@ -183,6 +183,67 @@ public class RoleFilterTests
         Assert.Equal(["senior", "principal"], config.ExcludedRoleList);
     }
 
+    // ---- the comma-separated list format --------------------------------
+
+    [Fact]
+    public void Lists_are_stored_comma_separated()
+    {
+        var config = new AppConfig();
+
+        config.SetDesiredRoles([".NET developer", "backend engineer"]);
+        config.SetCities(["London", "Manchester"]);
+
+        Assert.Equal(".NET developer, backend engineer", config.DesiredRoles);
+        Assert.Equal("London, Manchester", config.Cities);
+    }
+
+    [Theory]
+    [InlineData(".NET developer,backend engineer")]
+    [InlineData(".NET developer, backend engineer")]
+    [InlineData("  .NET developer ,  backend engineer  ")]
+    [InlineData(".NET developer,,backend engineer,")]
+    public void Spacing_and_stray_commas_do_not_matter(string entered) =>
+        Assert.Equal([".NET developer", "backend engineer"], AppConfig.ParseList(entered));
+
+    [Fact]
+    public void Newlines_are_still_accepted_so_a_pasted_column_works()
+    {
+        // Also keeps rows written before these fields were comma-separated readable.
+        var parsed = AppConfig.ParseList("senior\nprincipal\r\nmanager");
+
+        Assert.Equal(["senior", "principal", "manager"], parsed);
+    }
+
+    [Fact]
+    public void A_config_stored_in_the_old_newline_format_still_reads_correctly()
+    {
+        var config = new AppConfig { DesiredRoles = ".NET developer\nbackend engineer" };
+
+        Assert.Equal([".NET developer", "backend engineer"], config.DesiredRoleList);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(",")]
+    [InlineData(" , , ")]
+    public void A_list_of_nothing_is_empty(string? entered) =>
+        Assert.Empty(AppConfig.ParseList(entered));
+
+    [Fact]
+    public void A_single_entry_needs_no_comma() =>
+        Assert.Equal([".NET developer"], AppConfig.ParseList(".NET developer"));
+
+    [Fact]
+    public void Round_tripping_through_the_stored_format_is_stable()
+    {
+        var first = AppConfig.FormatList([".NET developer", "backend engineer"]);
+        var parsed = AppConfig.ParseList(first);
+
+        Assert.Equal(first, AppConfig.FormatList(parsed));
+    }
+
     [Fact]
     public void An_empty_config_yields_empty_lists()
     {

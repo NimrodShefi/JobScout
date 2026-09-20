@@ -115,10 +115,10 @@ in the app. They are the single `AppConfig` row behind **Settings**.
 |---|---|
 | **Minimum salary** | Listings whose top-of-range falls below this are dropped. A listing with no salary stated is **kept and flagged**, never dropped. |
 | **Currency** | The currency the minimum is expressed in, and the default stamped on listings. |
-| **Cities** | One per line. A listing must mention one of them. Empty means anywhere. |
+| **Cities** | Comma separated, e.g. `London, Manchester`. A listing must mention one of them. Empty means anywhere. |
 | **Include remote** | When off, anything advertised as remote is dropped even if it also names one of your cities. |
-| **Roles I want** | One per line, e.g. `.NET developer`. Empty means every title is in scope. When set, a title matching none of them is dropped **before it costs anything to score**. |
-| **Roles to exclude** | One per line, e.g. `senior`. Any title containing one of these words is dropped. |
+| **Roles I want** | Comma separated, e.g. `.NET developer, backend engineer`. Empty means every title is in scope. When set, a title matching none of them is dropped **before it costs anything to score**. |
+| **Roles to exclude** | Comma separated, e.g. `senior, principal`. Any title containing one of these words is dropped. |
 | **CV** | PDF or DOCX. The extracted text is shown so you can check it came out readable, and is what every score is judged against. |
 
 #### How role matching works
@@ -131,7 +131,17 @@ mistakes a plain substring match would make:
 - `lead` matches `Tech Lead, Payments` but **not** `Leadership Development Programme`.
 
 Word order is significant, so `.NET developer` does not match `Developer - .NET`. If a site
-words its titles that way, add the variant as its own line.
+words its titles that way, add the variant as another comma-separated entry.
+
+All three lists are comma separated. Spacing around the commas does not matter and empty
+entries are ignored, so `.NET developer,backend engineer` and
+`.NET developer,  backend engineer,` both give the same two terms. Newlines are accepted as
+separators too, so pasting a column of values works and settings saved before these fields
+became comma separated still read correctly.
+
+One limitation worth knowing: because commas separate entries, a single term cannot itself
+contain a comma. In practice that is not a constraint on search terms - use
+`backend engineer` rather than `Engineer, Backend`.
 
 **An exclusion always beats a wanted role.** With `.NET developer` wanted and `senior`
 excluded, `Senior .NET Developer` is dropped. That is the point of the pair: describe the

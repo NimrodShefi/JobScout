@@ -71,6 +71,7 @@ try
     builder.Services.AddSingleton<ScoringService>();
     builder.Services.AddSingleton<EmailProcessingService>();
     builder.Services.AddSingleton<ApplicationService>();
+    builder.Services.AddSingleton<AppConfigService>();
 
     // -----------------------------------------------------------------------
     // Scheduled jobs. Cron expressions and the time zone come from config. The

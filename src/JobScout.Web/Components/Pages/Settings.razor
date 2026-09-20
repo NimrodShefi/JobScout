@@ -2,9 +2,11 @@
 @rendermode InteractiveServer
 @using JobScout.Core.Abstractions
 @using JobScout.Core.Services
+@using JobScout.Infrastructure.Services
 @using JobScout.Web.Services
 @inject IDbContextFactory<JobScoutDbContext> DbFactory
 @inject ICvTextExtractor CvExtractor
+@inject AppConfigService ConfigService
 @inject Display Fmt
 @inject ILogger<Settings> Logger
 
@@ -56,9 +58,9 @@ else
 
             <div class="field">
                 <label for="cities">Cities</label>
-                <textarea id="cities" rows="5" @bind="_cities"
-                          placeholder="One per line, e.g.&#10;London&#10;Manchester"></textarea>
-                <div class="hint">One per line. Leave empty to accept any location.</div>
+                <input id="cities" type="text" style="width:100%" @bind="_cities"
+                       placeholder="London, Manchester" />
+                <div class="hint">Comma separated. Leave empty to accept any location.</div>
             </div>
 
             <div class="field">
@@ -71,23 +73,23 @@ else
 
             <div class="field">
                 <label for="desired-roles">Roles I want</label>
-                <textarea id="desired-roles" rows="4" @bind="_desiredRoles"
-                          placeholder="One per line, e.g.&#10;.NET developer&#10;backend engineer"></textarea>
+                <input id="desired-roles" type="text" style="width:100%" @bind="_desiredRoles"
+                       placeholder=".NET developer, backend engineer" />
                 <div class="hint">
-                    One per line. Leave empty to consider every title. When set, a listing whose
-                    title matches none of these is dropped before it costs anything to score.
-                    Matching is on whole words and ignores punctuation, so &quot;.NET developer&quot;
-                    also matches &quot;Developer - .Net&quot;.
+                    Comma separated. Leave empty to consider every title. When set, a listing
+                    whose title matches none of these is dropped before it costs anything to
+                    score. Matching is on whole words and ignores punctuation, so
+                    &quot;.NET developer&quot; also matches &quot;Senior .Net Developer&quot;.
                 </div>
             </div>
 
             <div class="field">
                 <label for="excluded-roles">Roles to exclude</label>
-                <textarea id="excluded-roles" rows="4" @bind="_excludedRoles"
-                          placeholder="One per line, e.g.&#10;senior&#10;principal&#10;manager"></textarea>
+                <input id="excluded-roles" type="text" style="width:100%" @bind="_excludedRoles"
+                       placeholder="senior, principal, manager" />
                 <div class="hint">
-                    One per line. Any title containing one of these words is dropped, even if it
-                    also matches a role you want &mdash; so &quot;senior&quot; still excludes
+                    Comma separated. Any title containing one of these words is dropped, even if
+                    it also matches a role you want &mdash; so &quot;senior&quot; still excludes
                     &quot;Senior .NET Developer&quot;.
                 </div>
             </div>
@@ -191,10 +193,10 @@ else
 
         _minimumSalary = _config.MinimumSalary;
         _currency = _config.Currency;
-        _cities = string.Join(Environment.NewLine, _config.CityList);
+        _cities = AppConfig.FormatList(_config.CityList);
         _includeRemote = _config.IncludeRemote;
-        _desiredRoles = string.Join(Environment.NewLine, _config.DesiredRoleList);
-        _excludedRoles = string.Join(Environment.NewLine, _config.ExcludedRoleList);
+        _desiredRoles = AppConfig.FormatList(_config.DesiredRoleList);
+        _excludedRoles = AppConfig.FormatList(_config.ExcludedRoleList);
 
         UpdateRolePreview();
     }
@@ -217,8 +219,8 @@ else
 
         var criteria = new MatchCriteria
         {
-            DesiredRoles = Lines(_desiredRoles),
-            ExcludedRoles = Lines(_excludedRoles),
+            DesiredRoles = AppConfig.ParseList(_desiredRoles),
+            ExcludedRoles = AppConfig.ParseList(_excludedRoles),
         };
 
         var outcome = ListingFilter.EvaluateTitle(_roleTest, criteria);
@@ -240,31 +242,25 @@ else
         };
     }
 
-    private static List<string> Lines(string value) =>
-        value.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-             .ToList();
-
     private async Task SaveCriteria()
     {
         _message = _error = null;
 
-        if (_minimumSalary < 0)
+        var result = await ConfigService.SaveCriteriaAsync(new CriteriaInput
         {
-            _error = "Minimum salary cannot be negative.";
+            MinimumSalary = _minimumSalary,
+            Currency = _currency,
+            Cities = _cities,
+            IncludeRemote = _includeRemote,
+            DesiredRoles = _desiredRoles,
+            ExcludedRoles = _excludedRoles,
+        });
+
+        if (!result.Saved)
+        {
+            _error = result.Error;
             return;
         }
-
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        var config = await db.AppConfigs.FirstAsync();
-
-        config.MinimumSalary = _minimumSalary;
-        config.Currency = _currency;
-        config.SetCities(_cities.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries));
-        config.IncludeRemote = _includeRemote;
-        config.UpdatedAt = DateTimeOffset.UtcNow;
-
-        await db.SaveChangesAsync();
 
         _message = "Criteria saved. They apply from the next run.";
         await LoadAsync();
