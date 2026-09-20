@@ -43,8 +43,9 @@ Each job has a **Run now** button on the *Job runs* page and writes one summary 
 ## Requirements
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- An API key for one AI provider (Anthropic, OpenAI, Azure OpenAI) — or a local
-  [Ollama](https://ollama.com) instance, which needs no key
+- **Required:** an API key for one AI provider (Anthropic, OpenAI, Azure OpenAI) — or a local
+  [Ollama](https://ollama.com) instance, which needs no key. **JobScout refuses to start
+  without a working AI configuration** (see [Fail-fast configuration](#fail-fast-configuration)).
 - Optional: an Adzuna API account (free tier) for discovery
 - Optional: an IMAP mailbox for the email check
 - Optional: Playwright browsers for JavaScript-rendered careers pages
@@ -59,7 +60,8 @@ cd JobScout
 dotnet build
 ```
 
-Set your AI key (see [AI provider](#ai-provider) for the other providers):
+Set your AI key — this is not optional, the app will not start without it
+(see [AI provider](#ai-provider) for the other providers):
 
 ```bash
 dotnet user-secrets set "JobScout:Ai:ApiKey" "sk-ant-..." --project src/JobScout.Web
@@ -98,6 +100,52 @@ dotnet user-secrets list --project src/JobScout.Web
 
 Environment variables work too, with `__` for `:` —
 `JobScout__Ai__ApiKey=sk-ant-...`.
+
+Precedence, lowest to highest: `appsettings.json` → `appsettings.{Environment}.json` →
+user secrets → environment variables → command line. So an environment variable always
+overrides a stored secret, which is what makes one-off runs easy to test.
+
+### Fail-fast configuration
+
+The AI is not an optional extra — without it nothing can be scored — so **JobScout validates
+its AI settings at start-up and refuses to run if they cannot work**. The check happens
+before the database is touched and before any port is opened, so a bad configuration can
+never leave you with a half-running app that silently fails its first scan hours later.
+
+A rejected configuration exits with code `1` and prints what is wrong, with no stack trace:
+
+```
+[FTL] JobScout cannot start because its configuration is not valid:
+[FTL]   - 'JobScout:Ai:ApiKey' is required for the Anthropic provider. Set it with:
+          dotnet user-secrets set "JobScout:Ai:ApiKey" "<your key>" --project src/JobScout.Web
+[FTL] Fix the settings above and start JobScout again. See the README for examples.
+```
+
+Every problem is reported at once rather than one per restart, and no message ever echoes
+your key back.
+
+What is rejected:
+
+| Setting | Rejected when |
+|---|---|
+| `Provider` | Blank or not one of `Anthropic`, `OpenAI`, `AzureOpenAI`, `Ollama`. Removing the key entirely is fine — that means the default, `Anthropic`. Leaving it blank is not the same thing. |
+| `ApiKey` | Missing for any provider except Ollama, which authenticates nobody. Also rejected when it has leading or trailing whitespace, which otherwise surfaces much later as an unexplained `401`. |
+| `Endpoint` | Missing for `AzureOpenAI`; not an absolute `http(s)` URL; a full operation URL where Azure wants the resource root; or set at all for `Anthropic`, which has no custom endpoint and would silently ignore it. |
+| `DeploymentName` | Set on any provider other than `AzureOpenAI`, which would silently ignore it. |
+| `TimeoutSeconds`, `MaxDescriptionChars`, `MaxCvChars` | Zero or negative. |
+| `MaxJsonRetries` | Negative. Zero is fine and means a single attempt. |
+
+The last two endpoint rules exist because a half-finished switch between providers is the
+easiest mistake to make and the hardest to diagnose: an Azure endpoint left behind on
+`Provider: "Anthropic"` would start cleanly, then call Anthropic with an Azure key and fail
+on the first scan with an authentication error that explains nothing.
+
+Beyond the settings themselves, the provider client is actually constructed at start-up, so
+anything the SDK rejects also surfaces immediately. No network call is made — a key that is
+present but wrong is only discovered on first use, and shows up as a failed run.
+
+Email and job boards are **not** treated this way. They are genuinely optional: leave them
+unconfigured and the relevant job records "not configured" in its run summary and moves on.
 
 ### AI provider
 
@@ -389,7 +437,7 @@ filters in the database rather than forcing client-side evaluation.
 
 | Symptom | Cause and fix |
 |---|---|
-| A run fails with *No API key configured* | Set `JobScout:Ai:ApiKey` in user secrets. The app starts fine without it; only the jobs that need the AI fail, and they say so in the run log. |
+| The app exits immediately with *cannot start because its configuration is not valid* | Read the lines underneath it — each names the exact setting and how to fix it. This is by design: see [Fail-fast configuration](#fail-fast-configuration). |
 | Morning scan reads 0 pages | Companies need `Status = USE` **and** a careers URL. The dashboard flags any that are missing one. |
 | Nothing gets scored | No CV uploaded, or the companies are `REVIEW`/`NOT_USE`. Only `USE` companies are scored. |
 | Discovery finds nothing | Check the board is `Enabled` with valid keys, and that at least one industry is active. |

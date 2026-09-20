@@ -31,17 +31,82 @@ public static class DependencyInjection
     }
 
     /// <summary>Registers the AI matcher on whichever chat provider config selects.
-    /// The client is built lazily so the app still starts with no API key configured -
-    /// only the jobs that need the AI fail, and they fail with a clear message.</summary>
+    ///
+    /// Scoring is the whole point of the app, so the configuration is validated at start-up
+    /// and the client is built there too - a missing key stops the app rather than turning
+    /// into a failed run hours later. See <see cref="VerifyAiConfiguration"/>.</summary>
     public static IServiceCollection AddJobScoutAi(this IServiceCollection services)
     {
-        services.AddSingleton<IChatClient>(sp => new LazyChatClient(() => ChatClientFactory.Create(
+        services.AddSingleton<IValidateOptions<JobScoutOptions>, AiOptionsValidator>();
+
+        services.AddSingleton<IChatClient>(sp => ChatClientFactory.Create(
             sp.GetRequiredService<IOptions<JobScoutOptions>>(),
-            sp.GetRequiredService<ILoggerFactory>())));
+            sp.GetRequiredService<ILoggerFactory>()));
 
         services.AddSingleton<IJobMatcher, AiJobMatcher>();
 
         return services;
+    }
+
+    /// <summary>Forces the AI configuration to be validated and the provider client to be
+    /// built, so anything wrong with it throws now instead of on the first scan.
+    ///
+    /// Call this before the app starts serving. Reading <c>IOptions.Value</c> runs every
+    /// registered validator; resolving <see cref="IChatClient"/> then catches problems no
+    /// amount of config validation can see, such as a provider SDK rejecting the endpoint.</summary>
+    public static void VerifyAiConfiguration(IServiceProvider services)
+    {
+        var options = ReadOptions(services);
+
+        _ = services.GetRequiredService<IChatClient>();
+
+        var model = string.IsNullOrWhiteSpace(options.Ai.Model)
+            ? ChatClientFactory.DefaultModel(options.Ai.Provider)
+            : options.Ai.Model;
+
+        // Provider and model only - never the key.
+        services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("JobScout.Startup")
+            .LogInformation("AI provider {Provider} ready with model {Model}", options.Ai.Provider, model);
+    }
+
+    /// <summary>Materialises the options, turning a binding failure into the same kind of
+    /// validation error as everything else.
+    ///
+    /// Binding runs before any <see cref="IValidateOptions{T}"/> does, so a value the binder
+    /// cannot convert at all - a blank or misspelled <c>Provider</c>, a non-numeric timeout -
+    /// would otherwise escape as a raw stack trace that never reaches the validator.</summary>
+    private static JobScoutOptions ReadOptions(IServiceProvider services)
+    {
+        try
+        {
+            return services.GetRequiredService<IOptions<JobScoutOptions>>().Value;
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new OptionsValidationException(
+                Options.DefaultName, typeof(JobScoutOptions), DescribeBindingFailure(ex));
+        }
+    }
+
+    private static string[] DescribeBindingFailure(InvalidOperationException ex)
+    {
+        // The binder's own message already names the offending key and its value.
+        var messages = new List<string> { ex.Message };
+
+        if (ex.Message.Contains(nameof(AiProvider), StringComparison.Ordinal))
+        {
+            messages.Add(
+                $"Set 'JobScout:Ai:Provider' to one of: {string.Join(", ", Enum.GetNames<AiProvider>())}. " +
+                "Remove the setting entirely to use the default (Anthropic); leaving it blank is not the same thing.");
+        }
+        else if (ex.Message.Contains(nameof(EmailProviderKind), StringComparison.Ordinal))
+        {
+            messages.Add(
+                $"Set 'JobScout:Email:Provider' to one of: {string.Join(", ", Enum.GetNames<EmailProviderKind>())}.");
+        }
+
+        return [.. messages];
     }
 
     /// <summary>Registers page fetching: resilient HttpClients, the robots.txt gate,
