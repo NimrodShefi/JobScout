@@ -31,6 +31,16 @@ public static partial class HtmlText
         "job", "vacanc", "career", "opening", "position", "role", "apply", "hiring", "we are looking",
     ];
 
+    /// <summary>Attribute fragments that identify a cookie or privacy consent banner.
+    /// These are pure boilerplate and can easily be two thirds of a corporate careers page,
+    /// which both costs tokens and risks pushing the real adverts past the truncation limit.</summary>
+    private static readonly string[] ConsentMarkers =
+    [
+        "onetrust", "ot-sdk", "cookiebot", "truste-consent", "cookie-banner", "cookie-consent",
+        "cookie-notice", "cookiepolicy", "cookie-policy", "gdpr-banner", "consent-banner",
+        "consent-manager", "privacy-banner", "usercentrics", "didomi",
+    ];
+
     public static string ExtractText(string html, int maxChars)
     {
         if (string.IsNullOrWhiteSpace(html)) return string.Empty;
@@ -39,6 +49,8 @@ public static partial class HtmlText
 
         foreach (var node in document.QuerySelectorAll("script, style, noscript, svg, template, iframe"))
             node.Remove();
+
+        RemoveConsentBanners(document);
 
         var body = document.Body;
         var text = body?.TextContent ?? document.TextContent ?? string.Empty;
@@ -89,6 +101,33 @@ public static partial class HtmlText
         }
 
         return ExtractText(document.DocumentElement.OuterHtml, maxChars);
+    }
+
+    /// <summary>Drops consent-banner containers, matching on id and class only. Never on
+    /// visible text, so a job advert that happens to mention cookies or privacy survives.</summary>
+    private static void RemoveConsentBanners(AngleSharp.Dom.IDocument document)
+    {
+        var body = document.Body;
+        if (body is null) return;
+
+        // Snapshot first: removing while enumerating the live collection would skip nodes.
+        var doomed = body.QuerySelectorAll("*")
+            .Where(element =>
+            {
+                // Never remove the body itself, however it is labelled.
+                if (ReferenceEquals(element, body)) return false;
+
+                var id = element.Id ?? string.Empty;
+                var className = element.ClassName ?? string.Empty;
+
+                return ConsentMarkers.Any(marker =>
+                    id.Contains(marker, StringComparison.OrdinalIgnoreCase) ||
+                    className.Contains(marker, StringComparison.OrdinalIgnoreCase));
+            })
+            .ToList();
+
+        foreach (var element in doomed)
+            element.Remove();
     }
 
     /// <summary>True when the HTML looks like an empty SPA shell: too little visible text,

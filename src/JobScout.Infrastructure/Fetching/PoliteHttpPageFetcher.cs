@@ -47,7 +47,9 @@ public sealed class PoliteHttpPageFetcher : IPageFetcher, IDisposable
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
             return PageFetchResult.Failed(url, "Not an absolute http(s) URL.");
 
-        if (!await _robots.IsAllowedAsync(url, ct))
+        var policy = await _robots.GetPolicyAsync(url, ct);
+
+        if (!policy.IsAllowed)
         {
             return new PageFetchResult
             {
@@ -61,14 +63,25 @@ public sealed class PoliteHttpPageFetcher : IPageFetcher, IDisposable
         await _concurrency.WaitAsync(ct);
         try
         {
-            await WaitForHostTurnAsync(uri.Host, ct);
+            // A host that publishes Crawl-delay is asking for a specific pace; take whichever
+            // is gentler, its request or our configured default.
+            await WaitForHostTurnAsync(uri.Host, policy.CrawlDelay, ct);
 
             var result = await FetchOverHttpAsync(uri, ct);
 
             if (!ShouldTryBrowser(result))
                 return result;
 
-            _logger.LogInformation("{Url} looks JavaScript-rendered - retrying with a headless browser", url);
+            if (result.BlockedByBotProtection)
+            {
+                _logger.LogInformation(
+                    "{Url} refused our HTTP client with {Status} - retrying with a headless browser",
+                    url, result.StatusCode);
+            }
+            else
+            {
+                _logger.LogInformation("{Url} looks JavaScript-rendered - retrying with a headless browser", url);
+            }
 
             var viaBrowser = await _browser!.FetchAsync(url, ct);
 
@@ -92,11 +105,21 @@ public sealed class PoliteHttpPageFetcher : IPageFetcher, IDisposable
     private bool ShouldTryBrowser(PageFetchResult httpResult)
     {
         if (_browser is null || !Fetching.EnableBrowserFallback) return false;
+
+        // robots.txt is the authority on what may be fetched at all. The browser changes
+        // which client does the fetching, never whether a disallowed path becomes allowed.
         if (httpResult.BlockedByRobots) return false;
 
-        // A transport failure is worth one browser attempt; a 4xx is not.
         if (!httpResult.Success)
+        {
+            // Bot protection rejects anything that does not look like a browser. Retrying
+            // through real Chromium is how an ordinary visitor reaches the same page.
+            if (httpResult.BlockedByBotProtection)
+                return Fetching.RetryBlockedPagesWithBrowser;
+
+            // A transport failure is worth one attempt; a genuine 404 or 500 is not.
             return httpResult.StatusCode is null;
+        }
 
         return HtmlText.LooksJavaScriptRendered(
             httpResult.Html ?? string.Empty,
@@ -171,10 +194,15 @@ public sealed class PoliteHttpPageFetcher : IPageFetcher, IDisposable
         }
     }
 
-    /// <summary>Spaces out requests to the same host by the configured delay.</summary>
-    private async Task WaitForHostTurnAsync(string host, CancellationToken ct)
+    /// <summary>Spaces out requests to the same host, honouring whichever is gentler:
+    /// our configured delay or the host's declared Crawl-delay.</summary>
+    private async Task WaitForHostTurnAsync(string host, TimeSpan? crawlDelay, CancellationToken ct)
     {
         var delay = TimeSpan.FromMilliseconds(Math.Max(0, Fetching.PolitenessDelayMs));
+
+        if (crawlDelay is not null && crawlDelay.Value > delay)
+            delay = crawlDelay.Value;
+
         if (delay <= TimeSpan.Zero) return;
 
         while (true)

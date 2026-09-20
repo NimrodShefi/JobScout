@@ -68,6 +68,20 @@ public sealed class FetchOptions
     /// <summary>Turn off to run without Playwright browsers installed.</summary>
     public bool EnableBrowserFallback { get; set; } = true;
 
+    /// <summary>Retry with the headless browser when a site answers our plain HTTP client
+    /// with 401, 403 or 429.
+    ///
+    /// Large careers sites sit behind bot protection that rejects any client which does not
+    /// look like a browser, often including robots.txt itself. Retrying through real Chromium
+    /// is how a normal visitor would see the page. robots.txt still decides what may be
+    /// fetched at all - this only changes which client does the fetching, never whether a
+    /// disallowed path is allowed.</summary>
+    public bool RetryBlockedPagesWithBrowser { get; set; } = true;
+
+    /// <summary>Upper bound on a host's declared Crawl-delay, so one unusually large value
+    /// cannot stall an entire run.</summary>
+    public int MaxCrawlDelaySeconds { get; set; } = 30;
+
     /// <summary>Below this many characters of visible text the page is treated as JS-rendered.</summary>
     public int JsHeuristicMinTextLength { get; set; } = 600;
 

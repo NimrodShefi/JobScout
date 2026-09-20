@@ -21,6 +21,12 @@ public sealed record PageFetchResult
     /// <summary>True when robots.txt told us not to fetch this path.</summary>
     public bool BlockedByRobots { get; init; }
 
+    /// <summary>True when the host refused the request outright - 401, 403 or 429. Typically
+    /// edge bot protection rejecting a client that does not look like a browser, rather than
+    /// a considered decision about this particular path.</summary>
+    public bool BlockedByBotProtection =>
+        StatusCode is 401 or 403 or 429;
+
     public static PageFetchResult Failed(string url, string error, string method = "HttpClient") =>
         new() { Url = url, Success = false, Error = error, Method = method };
 }

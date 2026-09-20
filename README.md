@@ -312,15 +312,40 @@ Chromium via Playwright.
   "PolitenessDelayMs": 1500,
   "RespectRobotsTxt": true,
   "EnableBrowserFallback": true,
+  "RetryBlockedPagesWithBrowser": true,
+  "MaxCrawlDelaySeconds": 30,
   "JsHeuristicMinTextLength": 600,
   "MaxPageTextChars": 60000
 }
 ```
 
-`robots.txt` is fetched, cached for 12 hours and honoured (`Allow`/`Disallow`, wildcards,
-`$` anchors, and a group naming `JobScout` taking precedence over `*`). A host that does not
-serve one is treated as allowing everything, which is what the standard says. Blocked pages
-are skipped and counted in the run summary.
+`robots.txt` is fetched, cached for 12 hours and honoured: `Allow`/`Disallow`, wildcards,
+`$` anchors, a group naming `JobScout` taking precedence over `*`, and the host's declared
+`Crawl-delay`. Where a host asks for a longer delay than `PolitenessDelayMs`, its request
+wins (capped by `MaxCrawlDelaySeconds` so one large value cannot stall a whole run). A host
+that does not publish robots.txt is treated as allowing everything, which is what RFC 9309
+says. Disallowed pages are skipped and counted in the run summary.
+
+#### Sites that refuse automated clients
+
+Large careers sites often sit behind bot protection that answers anything not shaped like a
+browser with **HTTP 403** — frequently including `robots.txt` itself. When that happens:
+
+- **robots.txt is re-read through the headless browser.** Treating an unreadable robots.txt
+  as "no rules" would mean ignoring real `Disallow` rules, which is worse than useless. If it
+  still cannot be read, the run says so rather than pretending the host has no policy.
+- **The page is retried through the headless browser**, which is how an ordinary visitor
+  reaches it. Set `RetryBlockedPagesWithBrowser: false` to disable.
+- **robots.txt remains the authority.** The browser changes *which client* fetches a page,
+  never *whether a disallowed path may be fetched*. A path under `Disallow` is refused no
+  matter which client is used.
+
+This needs the Playwright browsers installed. Without them, the run summary reports the
+company as having refused automated access and points you at the job-board route instead.
+
+Consent banners (OneTrust, Cookiebot, TrustArc and friends) are stripped from the page text
+before it reaches the AI. On one real careers page that was 63% of the text — pure cost, and
+enough to push the actual adverts past `MaxDescriptionChars`.
 
 ### Scheduling
 
@@ -442,6 +467,7 @@ filters in the database rather than forcing client-side evaluation.
 | Nothing gets scored | No CV uploaded, or the companies are `REVIEW`/`NOT_USE`. Only `USE` companies are scored. |
 | Discovery finds nothing | Check the board is `Enabled` with valid keys, and that at least one industry is active. |
 | A careers page yields no jobs | Likely JavaScript-rendered. Install the Playwright browsers, or check the log for a `robots.txt disallows` line. |
+| A company reports **HTTP 403 Forbidden** | The site blocks non-browser clients. Install the Playwright browsers and it is retried automatically — see [Sites that refuse automated clients](#sites-that-refuse-automated-clients). If the path is genuinely under `Disallow`, use the job-board route instead. |
 | CV text comes out garbled | The PDF is probably a scan with no text layer. Re-export it as a text PDF, or upload the DOCX. |
 | Email check says *No mailbox configured* | Set `JobScout:Email:Provider` to `Imap` and fill in the host, username and password. |
 | Scoring costs more than expected | Lower `Scoring:MaxListingsPerRun`, or use a cheaper model. |

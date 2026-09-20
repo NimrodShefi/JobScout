@@ -164,6 +164,74 @@ public class RobotsRulesTests
         return rules.IsAllowed(path);
     }
 
+    private static TimeSpan? CrawlDelay(string robotsTxt) =>
+        RobotsGate.CachedRules.Parse(robotsTxt, "JobScout/1.0 (test)").CrawlDelay;
+
+    // ---- Crawl-delay ----------------------------------------------------
+
+    [Fact]
+    public void A_declared_crawl_delay_is_read()
+    {
+        // This is NatWest's actual robots.txt.
+        const string robots = """
+            User-agent: *
+            Disallow: /jobs/category/
+
+            Crawl-Delay: 1
+            """;
+
+        Assert.Equal(TimeSpan.FromSeconds(1), CrawlDelay(robots));
+
+        // ...and the rest of the site stays crawlable.
+        Assert.False(IsAllowed(robots, "/jobs/category/technology"));
+        Assert.True(IsAllowed(robots, "/search/permanent-technology/jobs/in/london"));
+    }
+
+    [Fact]
+    public void A_fractional_crawl_delay_is_read() =>
+        Assert.Equal(TimeSpan.FromSeconds(0.5), CrawlDelay("""
+            User-agent: *
+            Crawl-delay: 0.5
+            """));
+
+    [Fact]
+    public void A_crawl_delay_aimed_at_us_beats_the_star_group()
+    {
+        const string robots = """
+            User-agent: *
+            Crawl-delay: 10
+
+            User-agent: JobScout
+            Crawl-delay: 2
+            """;
+
+        Assert.Equal(TimeSpan.FromSeconds(2), CrawlDelay(robots));
+    }
+
+    [Fact]
+    public void No_crawl_delay_declared_means_none() =>
+        Assert.Null(CrawlDelay("""
+            User-agent: *
+            Disallow: /admin
+            """));
+
+    [Theory]
+    [InlineData("nonsense")]
+    [InlineData("-5")]
+    [InlineData("999999")]
+    public void A_nonsensical_crawl_delay_is_ignored(string value) =>
+        Assert.Null(CrawlDelay($"User-agent: *\nCrawl-delay: {value}"));
+
+    [Fact]
+    public void Rules_that_were_actually_read_are_marked_as_such()
+    {
+        Assert.True(RobotsGate.CachedRules.Parse("User-agent: *", "JobScout").WasRead);
+
+        // Unknown is not the same as "no rules": it means we never got to see them.
+        Assert.False(RobotsGate.CachedRules.Unknown().WasRead);
+        Assert.True(RobotsGate.CachedRules.Unknown().IsAllowed("/anything"));
+    }
+
     [Fact]
     public void An_empty_robots_file_allows_everything() =>
         Assert.True(IsAllowed("", "/careers"));
@@ -289,6 +357,52 @@ public class JavaScriptHeuristicTests
 
         Assert.Contains("Engineer", text);
         Assert.Contains("https://acme.test/jobs/1", text);
+    }
+
+    [Fact]
+    public void Cookie_consent_banners_are_stripped_before_the_text_reaches_the_ai()
+    {
+        // On a real corporate careers page this boilerplate was two thirds of the text,
+        // which both costs tokens and risks truncating the adverts away.
+        const string html = """
+            <html><body>
+              <div id="onetrust-consent-sdk">We use cookies. List of IAB Vendors. Consent Leg.Interest.</div>
+              <div class="cookie-banner">Accept all cookies</div>
+              <main><h2>Colleague Technology Security Lead</h2><p>London, United Kingdom</p></main>
+            </body></html>
+            """;
+
+        var text = HtmlText.ExtractText(html, 10_000);
+
+        Assert.Contains("Colleague Technology Security Lead", text);
+        Assert.DoesNotContain("IAB Vendors", text);
+        Assert.DoesNotContain("Accept all cookies", text);
+    }
+
+    [Fact]
+    public void An_advert_that_merely_mentions_cookies_is_not_stripped()
+    {
+        // Matching is on id and class only, never on visible text.
+        const string html = """
+            <html><body>
+              <main><h2>Engineer, Cookie Consent Platform</h2><p>Build our privacy banner.</p></main>
+            </body></html>
+            """;
+
+        var text = HtmlText.ExtractText(html, 10_000);
+
+        Assert.Contains("Engineer, Cookie Consent Platform", text);
+        Assert.Contains("privacy banner", text);
+    }
+
+    [Fact]
+    public void A_page_that_is_nothing_but_a_consent_banner_does_not_become_an_exception()
+    {
+        var text = HtmlText.ExtractText(
+            """<html><body class="cookie-consent"><div id="onetrust-banner-sdk">cookies</div></body></html>""",
+            10_000);
+
+        Assert.NotNull(text);
     }
 
     [Fact]

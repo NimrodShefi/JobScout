@@ -31,6 +31,8 @@ public sealed class MorningScanJob(
         var scanned = 0;
         var failed = 0;
         var blocked = 0;
+        var refused = 0;
+        var refusedCompanies = new List<string>();
         var totals = new UpsertOutcome();
 
         foreach (var company in companies)
@@ -43,6 +45,21 @@ public sealed class MorningScanJob(
             {
                 logger.LogInformation("Skipping {Company}: robots.txt disallows {Url}", company.Name, company.Url);
                 blocked++;
+                continue;
+            }
+
+            if (page.BlockedByBotProtection)
+            {
+                // Bot protection, not a broken link. Worth calling out separately so it is
+                // obvious this needs the browser or the job-board route rather than a retry.
+                logger.LogWarning(
+                    "{Company} refused the request with HTTP {Status}. The site blocks automated " +
+                    "clients; install the Playwright browsers, or let discovery pick this company " +
+                    "up from a job board instead.",
+                    company.Name, page.StatusCode);
+
+                refused++;
+                refusedCompanies.Add(company.Name);
                 continue;
             }
 
@@ -73,7 +90,7 @@ public sealed class MorningScanJob(
         // Score everything pending, board-sourced listings included.
         var scored = await scoring.ScorePendingAsync(ct: ct);
 
-        return Summarise(companies.Count, scanned, failed, blocked, totals, scored);
+        return Summarise(companies.Count, scanned, failed, blocked, refused, refusedCompanies, totals, scored);
     }
 
     private async Task<JobScout.Core.Models.MatchCriteria> LoadCriteriaAsync(CancellationToken ct)
@@ -84,14 +101,20 @@ public sealed class MorningScanJob(
     }
 
     private static string Summarise(
-        int companyCount, int scanned, int failed, int blocked,
-        UpsertOutcome totals, ScoringOutcome scored)
+        int companyCount, int scanned, int failed, int blocked, int refused,
+        List<string> refusedCompanies, UpsertOutcome totals, ScoringOutcome scored)
     {
         var sb = new StringBuilder()
             .Append($"{scanned}/{companyCount} careers page(s) read");
 
         if (failed > 0) sb.Append($", {failed} failed");
         if (blocked > 0) sb.Append($", {blocked} blocked by robots.txt");
+
+        if (refused > 0)
+        {
+            sb.Append($", {refused} refused automated access ({string.Join(", ", refusedCompanies.Take(3))}")
+              .Append(refusedCompanies.Count > 3 ? $" and {refusedCompanies.Count - 3} more)" : ")");
+        }
 
         sb.Append($"; {totals.Inserted} new listing(s), {totals.Updated} updated");
 
@@ -100,9 +123,16 @@ public sealed class MorningScanJob(
             sb.Append($", {filtered} filtered out ({totals.RejectedLocation} location, {totals.RejectedSalary} salary)");
 
         sb.Append($"; {scored.Scored} scored");
+
         if (scored.Skipped > 0) sb.Append($", {scored.Skipped} unchanged");
         if (scored.Failed > 0) sb.Append($", {scored.Failed} scoring failure(s)");
         if (scored.HitCap) sb.Append(" (per-run cap reached)");
+
+        if (refused > 0)
+        {
+            sb.Append(". Sites that refuse automated access need the Playwright browsers installed, ")
+              .Append("or are better reached through a job board on the Discovery run.");
+        }
 
         return sb.ToString();
     }
