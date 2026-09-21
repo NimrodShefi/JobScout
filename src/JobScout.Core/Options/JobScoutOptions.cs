@@ -12,6 +12,7 @@ public sealed class JobScoutOptions
     public BoardOptions Boards { get; set; } = new();
     public SchedulingOptions Scheduling { get; set; } = new();
     public ScoringOptions Scoring { get; set; } = new();
+    public DiscoveryOptions Discovery { get; set; } = new();
 }
 
 public enum AiProvider
@@ -162,4 +163,13 @@ public sealed class ScoringOptions
 
     /// <summary>Simultaneous scoring calls.</summary>
     public int MaxConcurrency { get; set; } = 2;
+}
+
+public sealed class DiscoveryOptions
+{
+    /// <summary>Hard cap on how many unseen companies one discovery run may add. The run
+    /// stops as soon as the cap is hit, so the review queue cannot grow faster than I can
+    /// work through it. Whatever the boards found beyond the cap is simply picked up by the
+    /// next run.</summary>
+    public int MaxNewCompaniesPerRun { get; set; } = 5;
 }

@@ -439,4 +439,90 @@ public class ListingUpsertTests : IDisposable
         Assert.Equal("https://adzuna.test/ad/1", company.BoardUrl);
         Assert.Equal(CompanyStatus.USE, company.Status); // unchanged
     }
+
+    // ---- the per-run new-company cap -------------------------------------
+
+    private static BoardJobResult FromCompany(string company, int advert) => new()
+    {
+        CompanyName = company,
+        Title = "Engineer",
+        Url = $"https://adzuna.test/{company}/{advert}",
+    };
+
+    [Fact]
+    public async Task One_batch_creates_no_more_companies_than_the_cap_allows()
+    {
+        var results = Enumerable.Range(1, 12).Select(i => FromCompany($"Company{i}", i)).ToList();
+
+        var (_, newCompanies) = await _service.UpsertBoardResultsAsync(
+            "Adzuna", results, AnyLocationAnySalary, maxNewCompanies: 5);
+
+        Assert.Equal(5, newCompanies);
+
+        await using var db = _db.CreateDbContext();
+        Assert.Equal(5, await db.Companies.CountAsync());
+    }
+
+    [Fact]
+    public async Task Adverts_for_a_company_the_cap_turned_away_are_not_saved()
+    {
+        var results = Enumerable.Range(1, 12).Select(i => FromCompany($"Company{i}", i)).ToList();
+
+        await _service.UpsertBoardResultsAsync(
+            "Adzuna", results, AnyLocationAnySalary, maxNewCompanies: 5);
+
+        await using var db = _db.CreateDbContext();
+
+        // A listing with no company row would be orphaned, so it waits for the next run.
+        Assert.Equal(5, await db.JobListings.CountAsync());
+        Assert.All(await db.JobListings.ToListAsync(), l => Assert.True(l.CompanyId > 0));
+    }
+
+    [Fact]
+    public async Task The_cap_only_counts_companies_it_had_to_create()
+    {
+        await AddCompanyAsync("Company1");
+        await AddCompanyAsync("Company2");
+
+        var results = Enumerable.Range(1, 12).Select(i => FromCompany($"Company{i}", i)).ToList();
+
+        var (_, newCompanies) = await _service.UpsertBoardResultsAsync(
+            "Adzuna", results, AnyLocationAnySalary, maxNewCompanies: 5);
+
+        Assert.Equal(5, newCompanies);
+
+        await using var db = _db.CreateDbContext();
+
+        // The two already on file are not spent from the budget, so 7 exist in total.
+        Assert.Equal(7, await db.Companies.CountAsync());
+    }
+
+    [Fact]
+    public async Task A_company_already_on_file_keeps_taking_adverts_after_the_cap_is_spent()
+    {
+        var known = await AddCompanyAsync("Known");
+
+        // Five unknown companies exhaust the budget before "Known" is reached.
+        var results = Enumerable.Range(1, 5).Select(i => FromCompany($"Company{i}", i)).ToList();
+        results.Add(FromCompany("Known", 99));
+
+        var (_, newCompanies) = await _service.UpsertBoardResultsAsync(
+            "Adzuna", results, AnyLocationAnySalary, maxNewCompanies: 5);
+
+        Assert.Equal(5, newCompanies);
+
+        await using var db = _db.CreateDbContext();
+        Assert.Equal(1, await db.JobListings.CountAsync(l => l.CompanyId == known));
+    }
+
+    [Fact]
+    public async Task No_cap_means_every_company_is_created()
+    {
+        var results = Enumerable.Range(1, 12).Select(i => FromCompany($"Company{i}", i)).ToList();
+
+        var (_, newCompanies) = await _service.UpsertBoardResultsAsync(
+            "Adzuna", results, AnyLocationAnySalary);
+
+        Assert.Equal(12, newCompanies);
+    }
 }

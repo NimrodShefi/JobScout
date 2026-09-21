@@ -60,11 +60,18 @@ public sealed class ListingUpsertService(
     }
 
     /// <summary>Upserts board results: creates any unseen company as REVIEW with a BoardUrl
-    /// and no careers page, then saves its listings unscored.</summary>
+    /// and no careers page, then saves its listings unscored.
+    ///
+    /// <paramref name="maxNewCompanies"/> caps how many unseen companies this batch may add;
+    /// null means no cap. The cap has to bite here and not only between queries, because a
+    /// single board query routinely returns adverts from dozens of companies we have never
+    /// seen. Companies already on file are unaffected - their adverts keep flowing however
+    /// much of the budget is left.</summary>
     public async Task<(UpsertOutcome Listings, int NewCompanies)> UpsertBoardResultsAsync(
         string boardName,
         IEnumerable<BoardJobResult> results,
         MatchCriteria criteria,
+        int? maxNewCompanies = null,
         CancellationToken ct = default)
     {
         var byCompany = results
@@ -80,8 +87,15 @@ public sealed class ListingUpsertService(
             ct.ThrowIfCancellationRequested();
 
             var first = group.First();
+            var mayCreate = maxNewCompanies is null || newCompanies < maxNewCompanies;
+
             var (companyId, created) = await EnsureCompanyAsync(
-                first.CompanyName, group.Key, boardName, first.CompanyBoardUrl ?? first.Url, ct);
+                first.CompanyName, group.Key, boardName, first.CompanyBoardUrl ?? first.Url,
+                mayCreate, ct);
+
+            // Out of budget and we have never seen this company: skip its adverts too, since
+            // a listing with no company row has nowhere to hang. The next run will find them.
+            if (companyId is null) continue;
 
             if (created) newCompanies++;
 
@@ -89,7 +103,7 @@ public sealed class ListingUpsertService(
                 r.Title, r.Location, r.Url, r.Description,
                 r.SalaryMin, r.SalaryMax, r.SalaryCurrency, r.IsRemote, r.PostedAt));
 
-            total += await UpsertAsync(companyId, boardName, candidates, criteria, ct);
+            total += await UpsertAsync(companyId.Value, boardName, candidates, criteria, ct);
         }
 
         return (total, newCompanies);
@@ -97,12 +111,16 @@ public sealed class ListingUpsertService(
 
     /// <summary>Finds a company by normalised name, or creates it as REVIEW.
     /// An existing company keeps its status and its careers URL - discovery never
-    /// overwrites a decision already made.</summary>
-    public async Task<(int CompanyId, bool Created)> EnsureCompanyAsync(
+    /// overwrites a decision already made.
+    ///
+    /// Returns a null id when the company is unknown and <paramref name="allowCreate"/> is
+    /// false, which is how the per-run discovery cap is enforced.</summary>
+    public async Task<(int? CompanyId, bool Created)> EnsureCompanyAsync(
         string displayName,
         string normalisedName,
         string source,
         string? boardUrl,
+        bool allowCreate = true,
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -121,6 +139,8 @@ public sealed class ListingUpsertService(
 
             return (existing.Id, false);
         }
+
+        if (!allowCreate) return (null, false);
 
         var company = new Company
         {

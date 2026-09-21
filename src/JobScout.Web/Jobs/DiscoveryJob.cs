@@ -1,9 +1,11 @@
 using JobScout.Core.Abstractions;
 using JobScout.Core.Entities;
 using JobScout.Core.Models;
+using JobScout.Core.Options;
 using JobScout.Infrastructure.Data;
 using JobScout.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace JobScout.Web.Jobs;
 
@@ -15,6 +17,7 @@ public sealed class DiscoveryJob(
     IDbContextFactory<JobScoutDbContext> dbFactory,
     IEnumerable<IJobBoardProvider> boards,
     ListingUpsertService upsert,
+    IOptions<JobScoutOptions> options,
     ILogger<DiscoveryJob> logger) : IScheduledJob
 {
     public const string Key = "discovery";
@@ -40,6 +43,11 @@ public sealed class DiscoveryJob(
         var queries = 0;
         var failedQueries = 0;
         var failedBoards = new HashSet<string>();
+
+        // A review queue I cannot keep up with is worse than a short one, so a run adds this
+        // many companies at most and then stops, leaving the rest for the next run.
+        var cap = Math.Max(1, options.Value.Discovery.MaxNewCompaniesPerRun);
+        var hitCap = false;
 
         foreach (var board in enabled)
         {
@@ -70,7 +78,7 @@ public sealed class DiscoveryJob(
                     if (results.Count == 0) continue;
 
                     var (listings, created) = await upsert.UpsertBoardResultsAsync(
-                        board.Name, results, criteria, ct);
+                        board.Name, results, criteria, cap - newCompanies, ct);
 
                     totals += listings;
                     newCompanies += created;
@@ -81,13 +89,27 @@ public sealed class DiscoveryJob(
                         board.Name, industry, city ?? "anywhere", results.Count,
                         listings.Inserted, created,
                         listings.RejectedTotal);
+
+                    if (newCompanies >= cap)
+                    {
+                        hitCap = true;
+                        logger.LogInformation(
+                            "Stopping discovery early: the per-run cap of {Cap} new company(ies) " +
+                            "has been reached", cap);
+                        break;
+                    }
                 }
+
+                if (hitCap) break;
             }
+
+            if (hitCap) break;
         }
 
         var summary =
             $"{queries} board quer{(queries == 1 ? "y" : "ies")} across {enabled.Count} board(s); " +
-            $"{newCompanies} new company(ies) awaiting review, " +
+            $"{newCompanies} new company(ies) awaiting review" +
+            (hitCap ? " (per-run cap reached, scan stopped early)" : "") + ", " +
             $"{totals.Inserted} new listing(s), {totals.Updated} updated";
 
         if (failedQueries > 0) summary += $", {failedQueries} quer{(failedQueries == 1 ? "y" : "ies")} failed";

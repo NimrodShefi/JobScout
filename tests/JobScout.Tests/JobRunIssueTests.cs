@@ -6,6 +6,7 @@ using JobScout.Core.Services;
 using JobScout.Infrastructure.Services;
 using JobScout.Tests.TestSupport;
 using JobScout.Web.Jobs;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -160,12 +161,60 @@ public class JobRunIssueTests : IDisposable
         var job = new DiscoveryJob(
             _db, [board],
             new ListingUpsertService(_db, NullLogger<ListingUpsertService>.Instance),
+            Options.Create(new JobScoutOptions()),
             NullLogger<DiscoveryJob>.Instance);
 
         var result = await job.RunAsync(CancellationToken.None);
 
         Assert.Contains(result.Issues, i => i.Contains("failed"));
         Assert.Contains("FakeBoard", string.Join(" ", result.Issues));
+    }
+
+    [Fact]
+    public async Task Discovery_stops_scanning_once_the_new_company_cap_is_reached()
+    {
+        await using (var db = _db.CreateDbContext())
+        {
+            // Ten industries would be ten queries if nothing stopped the run.
+            foreach (var n in Enumerable.Range(1, 10))
+                db.Industries.Add(new Industry { Name = $"Industry{n}", IsActive = true });
+
+            db.AppConfigs.Add(new AppConfig { Id = 1, Currency = "GBP", UpdatedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        var board = new FakeJobBoardProvider();
+
+        // One query alone carries more unseen companies than the cap allows.
+        foreach (var n in Enumerable.Range(1, 8))
+        {
+            board.Results.Add(new BoardJobResult
+            {
+                CompanyName = $"Company{n}",
+                Title = "Engineer",
+                Url = $"https://board.test/{n}",
+            });
+        }
+
+        var options = Options.Create(new JobScoutOptions
+        {
+            Discovery = new DiscoveryOptions { MaxNewCompaniesPerRun = 5 },
+        });
+
+        var job = new DiscoveryJob(
+            _db, [board],
+            new ListingUpsertService(_db, NullLogger<ListingUpsertService>.Instance),
+            options,
+            NullLogger<DiscoveryJob>.Instance);
+
+        var result = await job.RunAsync(CancellationToken.None);
+
+        await using var check = _db.CreateDbContext();
+        Assert.Equal(5, await check.Companies.CountAsync());
+
+        // The point of the cap: the remaining nine industries are never queried.
+        Assert.Single(board.Requests);
+        Assert.Contains("cap reached", result.Summary);
     }
 
     // ---- what the dashboard shows ---------------------------------------
