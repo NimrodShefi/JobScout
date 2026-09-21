@@ -130,6 +130,13 @@ label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; }
 
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
 .toolbar .field { margin-bottom: 0; }
+
+/* A group of checkboxes that reads as one control, e.g. the "Hide statuses" filter. */
+.checks { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
+          border: 1px solid var(--border); border-radius: var(--radius);
+          background: var(--surface); padding: 6px 10px; }
+.checks label { display: inline-flex; align-items: center; gap: 4px;
+                margin-bottom: 0; font-weight: 400; white-space: nowrap; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* ---------- badges ---------- */

@@ -47,6 +47,21 @@
     </div>
 
     <div class="field">
+        <label>Hide statuses</label>
+        <div class="checks">
+            @foreach (var status in Enum.GetValues<JobListingStatus>())
+            {
+                var hidden = status;
+                <label>
+                    <input type="checkbox" checked="@_hiddenStatuses.Contains(hidden)"
+                           @onchange="e => OnHiddenStatusChanged(hidden, e)" />
+                    @hidden
+                </label>
+            }
+        </div>
+    </div>
+
+    <div class="field">
         <label for="f-minscore">Min score</label>
         <input id="f-minscore" type="number" min="0" max="100" style="width:80px"
                value="@_minScore" @oninput="OnMinScoreChanged" />
@@ -150,6 +165,10 @@ else
     private bool _salaryUnknownOnly;
     private bool _unscoredOnly;
 
+    /// <summary>Statuses the table hides. Empty means nothing is hidden, so the page
+    /// behaves as it always did until a box is ticked.</summary>
+    private readonly HashSet<JobListingStatus> _hiddenStatuses = [];
+
     private SortKey _sortKey = SortKey.Score;
     private bool _descending = true;
 
@@ -203,6 +222,14 @@ else
 
         if (int.TryParse(_minScore, out var minScore))
             query = query.Where(l => l.Score >= minScore);
+
+        // Hiding wins over the Status filter above: picking a status and then hiding it
+        // leaves nothing, which is what the two controls together literally ask for.
+        if (_hiddenStatuses.Count > 0)
+        {
+            var hidden = _hiddenStatuses.ToArray();
+            query = query.Where(l => !hidden.Contains(l.Status));
+        }
 
         if (_salaryUnknownOnly)
             query = query.Where(l => !l.SalaryKnown);
@@ -285,10 +312,19 @@ else
         await LoadAsync();
     }
 
+    private async Task OnHiddenStatusChanged(JobListingStatus status, ChangeEventArgs e)
+    {
+        if (e.Value is true) _hiddenStatuses.Add(status);
+        else _hiddenStatuses.Remove(status);
+
+        await LoadAsync();
+    }
+
     private async Task ResetFilters()
     {
         _search = _companyId = _status = _minScore = string.Empty;
         _salaryUnknownOnly = _unscoredOnly = false;
+        _hiddenStatuses.Clear();
         await LoadAsync();
     }
 
