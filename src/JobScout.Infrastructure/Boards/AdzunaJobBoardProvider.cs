@@ -26,7 +26,7 @@ public sealed class AdzunaJobBoardProvider(
         !string.IsNullOrWhiteSpace(Config.AppId) &&
         !string.IsNullOrWhiteSpace(Config.AppKey);
 
-    public async Task<IReadOnlyList<BoardJobResult>> SearchAsync(
+    public async Task<IReadOnlyList<BoardJobResult>?> SearchAsync(
         BoardSearchRequest request,
         CancellationToken ct = default)
     {
@@ -72,7 +72,9 @@ public sealed class AdzunaJobBoardProvider(
         catch (Exception ex)
         {
             logger.LogWarning("Adzuna search for '{Query}' failed: {Error}", request.Query, ex.Message);
-            return [];
+
+            // Null, not empty: a failed query must not be recorded as "no jobs matched".
+            return null;
         }
     }
 

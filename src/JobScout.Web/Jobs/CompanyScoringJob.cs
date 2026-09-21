@@ -11,14 +11,23 @@ public sealed class CompanyScoringJob(ScoringService scoring)
 {
     public const string Key = "company-scoring";
 
-    public async Task<string> RunForCompanyAsync(int companyId, CancellationToken ct)
+    public async Task<JobRunResult> RunForCompanyAsync(int companyId, CancellationToken ct)
     {
         var outcome = await scoring.ScorePendingAsync(companyId, ct);
 
         var summary = $"{outcome.Scored} scored, {outcome.Skipped} unchanged, {outcome.Failed} failed";
         if (outcome.DescriptionsFetched > 0) summary += $", {outcome.DescriptionsFetched} description(s) fetched";
+        if (outcome.NoCv) summary += " (no CV uploaded)";
         if (outcome.HitCap) summary += " (per-run cap reached)";
 
-        return summary;
+        var issues = new List<string>();
+
+        if (outcome.NoCv)
+            issues.Add("No CV has been uploaded, so nothing was scored. Add one on the Settings page.");
+
+        if (outcome.Failed > 0)
+            issues.Add($"{outcome.Failed} listing(s) could not be scored by the AI.");
+
+        return new JobRunResult(summary, issues);
     }
 }

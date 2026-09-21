@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "jobscout-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/JobScout.Web",
+        "--launch-profile",
+        "JobScout"
+      ],
+      "port": 5179
+    }
+  ]
+}

@@ -26,7 +26,15 @@ public sealed class JobRunRecorder(IDbContextFactory<JobScoutDbContext> dbFactor
         return run.Id;
     }
 
-    public async Task FinishAsync(int runId, bool success, string? summary, string? error, CancellationToken ct = default)
+    /// <summary><paramref name="issues"/> are problems the run survived, one per line. They do
+    /// not make the run a failure, but they stop it being reported as clean.</summary>
+    public async Task FinishAsync(
+        int runId,
+        bool success,
+        string? summary,
+        string? error,
+        IReadOnlyList<string>? issues = null,
+        CancellationToken ct = default)
     {
         // Deliberately not the caller's token: a cancelled run still needs its row closed.
         await using var db = await dbFactory.CreateDbContextAsync(CancellationToken.None);
@@ -38,6 +46,7 @@ public sealed class JobRunRecorder(IDbContextFactory<JobScoutDbContext> dbFactor
         run.Success = success;
         run.Summary = Trim(summary, 2000);
         run.Error = Trim(error, 2000);
+        run.Issues = issues is null || issues.Count == 0 ? null : Trim(string.Join('\n', issues), 2000);
 
         await db.SaveChangesAsync(CancellationToken.None);
     }

@@ -10,7 +10,9 @@ public sealed class FakeJobMatcher : IJobMatcher
     public Func<string, string?, string, JobMatchResult?> ScoreHandler { get; set; } =
         (_, _, _) => new JobMatchResult { Score = 70, Reasoning = "fake" };
 
-    public Func<string, string, string, IReadOnlyList<ExtractedJob>> ExtractHandler { get; set; } =
+    /// <summary>Returning null models the AI call failing outright, which is a different
+    /// outcome from a page that genuinely has no adverts.</summary>
+    public Func<string, string, string, IReadOnlyList<ExtractedJob>?> ExtractHandler { get; set; } =
         (_, _, _) => [];
 
     public Func<IReadOnlyList<(int Id, string Company, string Title)>, string, string?, string?, EmailMatchResult?>
@@ -29,7 +31,7 @@ public sealed class FakeJobMatcher : IJobMatcher
         return Task.FromResult(ScoreHandler(jobTitle, jobLocation, jobDescription));
     }
 
-    public Task<IReadOnlyList<ExtractedJob>> ExtractJobsAsync(
+    public Task<IReadOnlyList<ExtractedJob>?> ExtractJobsAsync(
         string pageText, string pageUrl, string companyName, CancellationToken ct = default) =>
         Task.FromResult(ExtractHandler(pageText, pageUrl, companyName));
 
@@ -111,10 +113,13 @@ public sealed class FakeJobBoardProvider(string name = "FakeBoard") : IJobBoardP
     public List<BoardJobResult> Results { get; } = [];
     public List<BoardSearchRequest> Requests { get; } = [];
 
-    public Task<IReadOnlyList<BoardJobResult>> SearchAsync(
+    /// <summary>Set to make every query come back as a board failure rather than a clean zero.</summary>
+    public bool FailQueries { get; set; }
+
+    public Task<IReadOnlyList<BoardJobResult>?> SearchAsync(
         BoardSearchRequest request, CancellationToken ct = default)
     {
         Requests.Add(request);
-        return Task.FromResult<IReadOnlyList<BoardJobResult>>(Results);
+        return Task.FromResult<IReadOnlyList<BoardJobResult>?>(FailQueries ? null : Results);
     }
 }

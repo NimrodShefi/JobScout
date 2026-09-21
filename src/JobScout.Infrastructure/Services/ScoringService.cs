@@ -19,6 +19,10 @@ public sealed record ScoringOutcome
     public int Failed { get; init; }
     public int DescriptionsFetched { get; init; }
     public bool HitCap { get; init; }
+
+    /// <summary>Nothing was scored because no CV has been uploaded. Not a failure, but the
+    /// run did far less than it looks like it did, so the caller flags it.</summary>
+    public bool NoCv { get; init; }
 }
 
 /// <summary>Scores listings belonging to USE companies against the CV. Board listings often
@@ -43,7 +47,7 @@ public sealed class ScoringService(
         if (string.IsNullOrWhiteSpace(config.CvText))
         {
             logger.LogWarning("No CV text has been uploaded - scoring skipped");
-            return new ScoringOutcome();
+            return new ScoringOutcome { NoCv = true };
         }
 
         var criteria = ToCriteria(config);

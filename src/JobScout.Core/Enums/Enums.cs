@@ -47,3 +47,16 @@ public enum StatusChangeSource
     EmailAutomatic = 1,
     EmailSuggestionAccepted = 2,
 }
+
+/// <summary>How a job run ended, as the dashboard reports it. A run that finished but hit
+/// problems is deliberately not "ok" - silently reporting zero results as success is what
+/// let a total AI outage look like a quiet morning.</summary>
+public enum JobRunOutcome
+{
+    Running = 0,
+    Ok = 1,
+    /// <summary>Finished and saved its work, but something needs a look in the logs.</summary>
+    CompletedWithIssues = 2,
+    /// <summary>Threw - nothing useful came back.</summary>
+    Failed = 3,
+}

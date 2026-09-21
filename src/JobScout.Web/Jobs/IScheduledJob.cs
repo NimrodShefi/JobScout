@@ -8,9 +8,21 @@ namespace JobScout.Web.Jobs;
 /// which fails when no API key is configured.</summary>
 public interface IScheduledJob
 {
-    /// <summary>Does the work and returns the one-line summary written to JobRunLog.
-    /// Throwing is fine - the runner records the failure against the run.</summary>
-    Task<string> RunAsync(CancellationToken ct);
+    /// <summary>Does the work and returns the counts line written to JobRunLog, plus anything
+    /// that went wrong along the way. Throwing is fine - the runner records the failure
+    /// against the run.</summary>
+    Task<JobRunResult> RunAsync(CancellationToken ct);
+}
+
+/// <summary>What a job hands back: the counts line for the runs table, and the problems it
+/// carried on through.
+///
+/// Issues are not failures - the run still did its work - but they must reach the dashboard.
+/// A job whose every AI call 400s returns "0 advert(s) found" for every company and finishes
+/// green, which reads as a quiet morning rather than a broken pipeline.</summary>
+public sealed record JobRunResult(string Summary, IReadOnlyList<string> Issues)
+{
+    public static implicit operator JobRunResult(string summary) => new(summary, []);
 }
 
 /// <summary>Static description of a schedulable job.</summary>

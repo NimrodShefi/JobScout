@@ -5,6 +5,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\JobScout.Core\JobScout.Core.csproj" />
     <ProjectReference Include="..\..\src\JobScout.Infrastructure\JobScout.Infrastructure.csproj" />
+    <!-- The scheduled jobs live in the web project, and what they report to the dashboard
+         is worth testing: a run that goes wrong must not come back looking clean. -->
+    <ProjectReference Include="..\..\src\JobScout.Web\JobScout.Web.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />

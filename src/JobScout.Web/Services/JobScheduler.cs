@@ -107,10 +107,10 @@ public sealed class JobScheduler(
                 using var scope = scopeFactory.CreateScope();
                 var job = scope.ServiceProvider.GetRequiredService<CompanyScoringJob>();
 
-                var summary = await job.RunForCompanyAsync(companyId, CancellationToken.None);
-                await recorder.FinishAsync(runId, success: true, summary, error: null);
+                var result = await job.RunForCompanyAsync(companyId, CancellationToken.None);
+                await recorder.FinishAsync(runId, success: true, result.Summary, error: null, result.Issues);
 
-                logger.LogInformation("Scoring for {Company} finished: {Summary}", companyName, summary);
+                LogFinished($"scoring: {companyName}", runId, result);
             }
             catch (Exception ex)
             {
@@ -147,10 +147,10 @@ public sealed class JobScheduler(
             using var scope = scopeFactory.CreateScope();
             var job = (IScheduledJob)scope.ServiceProvider.GetRequiredService(jobType);
 
-            var summary = await job.RunAsync(ct);
+            var result = await job.RunAsync(ct);
 
-            await recorder.FinishAsync(runId, success: true, summary, error: null);
-            logger.LogInformation("'{JobKey}' finished (run {RunId}): {Summary}", jobKey, runId, summary);
+            await recorder.FinishAsync(runId, success: true, result.Summary, error: null, result.Issues);
+            LogFinished(jobKey, runId, result);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -170,6 +170,20 @@ public sealed class JobScheduler(
         }
 
         return true;
+    }
+
+    /// <summary>A run that finished with issues is logged as a warning, so the log file agrees
+    /// with the amber badge on the dashboard rather than quietly saying everything went well.</summary>
+    private void LogFinished(string jobKey, int runId, JobRunResult result)
+    {
+        if (result.Issues.Count == 0)
+        {
+            logger.LogInformation("'{JobKey}' finished (run {RunId}): {Summary}", jobKey, runId, result.Summary);
+            return;
+        }
+
+        logger.LogWarning("'{JobKey}' finished with {Count} issue(s) (run {RunId}): {Summary} | {Issues}",
+            jobKey, result.Issues.Count, runId, result.Summary, string.Join(" | ", result.Issues));
     }
 
     internal static bool TryParseCron(string? cron, out CronExpression? expression)

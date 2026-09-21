@@ -10,5 +10,7 @@ public interface IJobBoardProvider
 
     bool IsEnabled { get; }
 
-    Task<IReadOnlyList<BoardJobResult>> SearchAsync(BoardSearchRequest request, CancellationToken ct = default);
+    /// <summary>Runs one query. An empty list means the board had no matches; null means the
+    /// query failed, so the caller can flag it rather than record a silent zero.</summary>
+    Task<IReadOnlyList<BoardJobResult>?> SearchAsync(BoardSearchRequest request, CancellationToken ct = default);
 }

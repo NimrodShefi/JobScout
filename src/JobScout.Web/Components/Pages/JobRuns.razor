@@ -110,23 +110,40 @@
                             </td>
                             <td class="small muted">@Display.Duration(run.Duration)</td>
                             <td>
-                                @if (run.IsRunning)
+                                @switch (run.Outcome)
                                 {
-                                    <span class="badge warn">running</span>
-                                }
-                                else if (run.Success)
-                                {
-                                    <span class="badge ok">ok</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bad">failed</span>
+                                    case JobRunOutcome.Running:
+                                        <span class="badge warn">running</span>
+                                        break;
+                                    case JobRunOutcome.Ok:
+                                        <span class="badge ok">ok</span>
+                                        break;
+                                    case JobRunOutcome.CompletedWithIssues:
+                                        <span class="badge warn">issues</span>
+                                        break;
+                                    default:
+                                        <span class="badge bad">failed</span>
+                                        break;
                                 }
                             </td>
                             <td class="small">
                                 @if (run.Success)
                                 {
                                     @run.Summary
+
+                                    @if (run.HasIssues)
+                                    {
+                                        <ul class="issue-list">
+                                            @foreach (var issue in Display.Lines(run.Issues))
+                                            {
+                                                <li>@issue</li>
+                                            }
+                                        </ul>
+                                        <p class="issue-hint">
+                                            This run finished, but not everything worked. The full error is in
+                                            today's file in the <code>logs</code> folder.
+                                        </p>
+                                    }
                                 }
                                 else
                                 {

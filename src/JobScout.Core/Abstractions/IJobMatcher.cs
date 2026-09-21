@@ -16,8 +16,10 @@ public interface IJobMatcher
         string jobDescription,
         CancellationToken ct = default);
 
-    /// <summary>Pull job adverts out of a careers page.</summary>
-    Task<IReadOnlyList<ExtractedJob>> ExtractJobsAsync(
+    /// <summary>Pull job adverts out of a careers page. An empty list means the page held
+    /// no adverts; null means the call itself failed after the configured retries, which is
+    /// a very different thing and must not be reported as a quiet day.</summary>
+    Task<IReadOnlyList<ExtractedJob>?> ExtractJobsAsync(
         string pageText,
         string pageUrl,
         string companyName,

@@ -9,7 +9,7 @@ public sealed class EmailCheckJob(EmailProcessingService emails) : IScheduledJob
     public const string Key = "email-check";
 
 
-    public async Task<string> RunAsync(CancellationToken ct)
+    public async Task<JobRunResult> RunAsync(CancellationToken ct)
     {
         var outcome = await emails.ProcessAsync(ct);
 
@@ -27,6 +27,15 @@ public sealed class EmailCheckJob(EmailProcessingService emails) : IScheduledJob
         if (outcome.Unrelated > 0) parts.Add($"{outcome.Unrelated} unrelated");
         if (outcome.Failed > 0) parts.Add($"{outcome.Failed} could not be classified");
 
-        return string.Join(", ", parts);
+        var issues = new List<string>();
+
+        if (outcome.Failed > 0)
+        {
+            issues.Add(
+                $"The AI could not classify {outcome.Failed} of {outcome.MessagesRead} message(s), " +
+                "so any application updates they carried were missed.");
+        }
+
+        return new JobRunResult(string.Join(", ", parts), issues);
     }
 }

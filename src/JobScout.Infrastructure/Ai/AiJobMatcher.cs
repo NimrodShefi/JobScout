@@ -62,7 +62,7 @@ public sealed class AiJobMatcher(
         };
     }
 
-    public async Task<IReadOnlyList<ExtractedJob>> ExtractJobsAsync(
+    public async Task<IReadOnlyList<ExtractedJob>?> ExtractJobsAsync(
         string pageText,
         string pageUrl,
         string companyName,
@@ -79,7 +79,11 @@ public sealed class AiJobMatcher(
         var dto = await AskForJsonAsync<ExtractedJobsDto>(
             Prompts.ExtractSystem, prompt, "extract", d => d.Jobs is not null, ct);
 
-        if (dto?.Jobs is null) return [];
+        // Null here means the call never succeeded; the caller needs to know that, because
+        // "no adverts on the page" and "the model never answered" look identical otherwise.
+        if (dto is null) return null;
+
+        if (dto.Jobs is null) return [];
 
         var results = new List<ExtractedJob>(dto.Jobs.Count);
         foreach (var j in dto.Jobs)

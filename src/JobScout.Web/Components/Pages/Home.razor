@@ -125,18 +125,29 @@ else
                                     <td class="small">@run.JobName</td>
                                     <td class="small muted">@Display.Relative(run.StartedAt)</td>
                                     <td class="small">
-                                        @if (run.FinishedAt is null)
+                                        @switch (run.Outcome)
                                         {
-                                            <span class="badge warn">running</span>
-                                        }
-                                        else if (run.Success)
-                                        {
-                                            <span>@Display.Truncate(run.Summary, 110)</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bad">failed</span>
-                                            <span class="muted"> @Display.Truncate(run.Error, 90)</span>
+                                            case JobRunOutcome.Running:
+                                                <span class="badge warn">running</span>
+                                                break;
+
+                                            case JobRunOutcome.Ok:
+                                                <span>@Display.Truncate(run.Summary, 110)</span>
+                                                break;
+
+                                            case JobRunOutcome.CompletedWithIssues:
+                                                <span class="badge warn">issues</span>
+                                                <span> @Display.Truncate(run.Summary, 90)</span>
+                                                <p class="issue-hint">
+                                                    @Display.Truncate(Display.Lines(run.Issues).FirstOrDefault(), 110)
+                                                    <a href="/runs">See the run, then check the logs folder &rarr;</a>
+                                                </p>
+                                                break;
+
+                                            default:
+                                                <span class="badge bad">failed</span>
+                                                <span class="muted"> @Display.Truncate(run.Error, 90)</span>
+                                                break;
                                         }
                                     </td>
                                 </tr>

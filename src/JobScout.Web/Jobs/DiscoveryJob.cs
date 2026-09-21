@@ -20,7 +20,7 @@ public sealed class DiscoveryJob(
     public const string Key = "discovery";
 
 
-    public async Task<string> RunAsync(CancellationToken ct)
+    public async Task<JobRunResult> RunAsync(CancellationToken ct)
     {
         var enabled = boards.Where(b => b.IsEnabled).ToList();
 
@@ -38,6 +38,8 @@ public sealed class DiscoveryJob(
         var totals = new UpsertOutcome();
         var newCompanies = 0;
         var queries = 0;
+        var failedQueries = 0;
+        var failedBoards = new HashSet<string>();
 
         foreach (var board in enabled)
         {
@@ -55,6 +57,15 @@ public sealed class DiscoveryJob(
                     }, ct);
 
                     queries++;
+
+                    if (results is null)
+                    {
+                        // The board errored. Without this the run reports a clean zero and
+                        // looks like the market was quiet.
+                        failedQueries++;
+                        failedBoards.Add(board.Name);
+                        continue;
+                    }
 
                     if (results.Count == 0) continue;
 
@@ -79,12 +90,23 @@ public sealed class DiscoveryJob(
             $"{newCompanies} new company(ies) awaiting review, " +
             $"{totals.Inserted} new listing(s), {totals.Updated} updated";
 
+        if (failedQueries > 0) summary += $", {failedQueries} quer{(failedQueries == 1 ? "y" : "ies")} failed";
+
         if (totals.RejectedTotal > 0)
             summary += $", {totals.RejectedTotal} filtered out ({RejectionSummary.Describe(totals)})";
 
         summary += ". Listings are not scored until their company is set to USE.";
 
-        return summary;
+        var issues = new List<string>();
+
+        if (failedQueries > 0)
+        {
+            issues.Add(
+                $"{failedQueries} of {queries} board quer{(queries == 1 ? "y" : "ies")} failed " +
+                $"({string.Join(", ", failedBoards)}), so this run saw less than the full picture.");
+        }
+
+        return new JobRunResult(summary, issues);
     }
 
     private async Task<(List<string> Industries, MatchCriteria Criteria)> LoadInputsAsync(CancellationToken ct)

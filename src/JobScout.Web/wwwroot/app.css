@@ -159,6 +159,21 @@ label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; }
 .alert.bad  { background: #fbe6e5; border-color: #e6bcba; color: #8a2823; }
 .alert.ok   { background: #e2f3ea; border-color: #b3ddc5; color: #15603c; }
 
+/* A run that finished but hit problems. Amber, not red: the work was saved, but the
+   numbers above it cannot be taken at face value. */
+.issue-list {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    color: var(--warn);
+    line-height: 1.45;
+}
+.issue-hint {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    color: var(--muted);
+}
+.issue-hint a { margin-left: 4px; }
+
 .empty { padding: 28px; text-align: center; color: var(--muted); font-size: 14px; }
 
 /* ---------- misc ---------- */

@@ -150,12 +150,15 @@ public class JobRunLogConfiguration : IEntityTypeConfiguration<JobRunLog>
         e.HasKey(x => x.Id);
         e.Property(x => x.JobName).IsRequired().HasMaxLength(100);
         e.Property(x => x.Summary).HasMaxLength(2000);
+        e.Property(x => x.Issues).HasMaxLength(2000);
         e.Property(x => x.Error).HasMaxLength(2000);
 
         e.HasIndex(x => new { x.JobName, x.StartedAt });
 
         e.Ignore(x => x.IsRunning);
         e.Ignore(x => x.Duration);
+        e.Ignore(x => x.HasIssues);
+        e.Ignore(x => x.Outcome);
     }
 }
 
