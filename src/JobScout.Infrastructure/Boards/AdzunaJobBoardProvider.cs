@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using JobScout.Core.Abstractions;
 using JobScout.Core.Models;
@@ -51,7 +51,11 @@ public sealed class AdzunaJobBoardProvider(
                 return [];
             }
 
-            var payload = await response.Content.ReadFromJsonAsync<AdzunaResponse>(ct);
+            // Adzuna labels its responses "charset=utf8", which is not a valid IANA name, so
+            // ReadFromJsonAsync throws before it ever parses. JSON is UTF-8 by spec, so read
+            // the bytes straight off the stream and skip the charset negotiation entirely.
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            var payload = await JsonSerializer.DeserializeAsync<AdzunaResponse>(stream, cancellationToken: ct);
             var results = payload?.Results ?? [];
 
             var mapped = results
