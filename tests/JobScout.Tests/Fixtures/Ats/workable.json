@@ -1,0 +1,66 @@
+{
+  "name": "Starling",
+  "description": null,
+  "jobs": [
+    {
+      "title": "Android Engineer",
+      "shortcode": "0DA49B0B28",
+      "code": "",
+      "employment_type": "Full-time",
+      "telecommuting": false,
+      "department": "Technology",
+      "url": "https://apply.workable.com/j/0DA49B0B28",
+      "shortlink": "https://apply.workable.com/j/0DA49B0B28",
+      "application_url": "https://apply.workable.com/j/0DA49B0B28/apply",
+      "published_on": "2026-07-08",
+      "created_at": "2026-06-24",
+      "country": "United Kingdom",
+      "city": "Manchester",
+      "state": "England",
+      "education": "",
+      "experience": "Mid-Senior level",
+      "function": "Engineering",
+      "industry": "Financial Services",
+      "locations": [
+        {
+          "country": "United Kingdom",
+          "countryCode": "GB",
+          "city": "Manchester",
+          "region": "England",
+          "hidden": false
+        }
+      ],
+      "description": "<p>Starling is the UK’s first and leading digital bank on a mission to fix banking! We built a new kind of bank because we knew technology had the power to help people save, spend and manage their money in a new and transformative way.</p><p>We’re a fully licensed UK bank with the culture and spirit of a fast-moving, disruptive tech company. We’re a bank, but better: fairer, easier to use and desi"
+    },
+    {
+      "title": "Android Engineer",
+      "shortcode": "0DA49B0B28",
+      "code": "",
+      "employment_type": "Full-time",
+      "telecommuting": false,
+      "department": "Technology",
+      "url": "https://apply.workable.com/j/0DA49B0B28",
+      "shortlink": "https://apply.workable.com/j/0DA49B0B28",
+      "application_url": "https://apply.workable.com/j/0DA49B0B28/apply",
+      "published_on": "2026-07-08",
+      "created_at": "2026-06-24",
+      "country": "United Kingdom",
+      "city": "Cardiff",
+      "state": "Wales",
+      "education": "",
+      "experience": "Mid-Senior level",
+      "function": "Engineering",
+      "industry": "Financial Services",
+      "locations": [
+        {
+          "country": "United Kingdom",
+          "countryCode": "GB",
+          "city": "Cardiff",
+          "region": "Wales",
+          "hidden": false
+        }
+      ],
+      "description": "<p>Starling is the UK’s first and leading digital bank on a mission to fix banking! We built a new kind of bank because we knew technology had the power to help people save, spend and manage their money in a new and transformative way.</p><p>We’re a fully licensed UK bank with the culture and spirit of a fast-moving, disruptive tech company. We’re a bank, but better: fairer, easier to use and desi"
+    }
+  ]
+}

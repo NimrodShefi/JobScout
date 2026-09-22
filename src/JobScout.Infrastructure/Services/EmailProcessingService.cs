@@ -218,6 +218,8 @@ public sealed class EmailProcessingService(
             ApplicationStatus.Acknowledged,
             ApplicationStatus.Interview,
             ApplicationStatus.Offer,
+            // Silence is not an answer: a late reply must still reach the application.
+            ApplicationStatus.NoResponse,
         };
 
         var rows = await db.Applications

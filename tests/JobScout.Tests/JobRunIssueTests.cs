@@ -38,6 +38,7 @@ public class JobRunIssueTests : IDisposable
             _matcher,
             new ListingUpsertService(_db, NullLogger<ListingUpsertService>.Instance),
             new ScoringService(_db, _matcher, _fetcher, options, NullLogger<ScoringService>.Instance),
+            new AtsService(_db, [], options, NullLogger<AtsService>.Instance),
             NullLogger<MorningScanJob>.Instance);
     }
 

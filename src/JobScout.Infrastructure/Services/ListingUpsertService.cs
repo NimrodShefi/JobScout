@@ -54,7 +54,7 @@ public sealed class ListingUpsertService(
     {
         var candidates = jobs.Select(j => new Candidate(
             j.Title, j.Location, j.Url, j.Description,
-            j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.IsRemote, PostedAt: null));
+            j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.IsRemote, j.PostedAt));
 
         return await UpsertAsync(companyId, source, candidates, criteria, ct);
     }

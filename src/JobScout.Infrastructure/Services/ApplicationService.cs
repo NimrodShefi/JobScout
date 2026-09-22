@@ -1,5 +1,6 @@
 using JobScout.Core.Entities;
 using JobScout.Core.Enums;
+using JobScout.Core.Services;
 using JobScout.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -177,6 +178,70 @@ public sealed class ApplicationService(
 
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>Moves every application that has heard nothing for <paramref name="afterDays"/>
+    /// days to NoResponse, with a history row. Returns how many moved.
+    ///
+    /// NoResponse is not terminal: a late reply can still move the application on, since the
+    /// email check keeps matching against it.</summary>
+    public async Task<int> MarkStaleAsync(int afterDays, DateTimeOffset? now = null, CancellationToken ct = default)
+    {
+        if (afterDays <= 0) return 0;
+
+        var at = now ?? DateTimeOffset.UtcNow;
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var candidates = await db.Applications
+            .Where(a => a.Status == ApplicationStatus.Applied || a.Status == ApplicationStatus.Acknowledged)
+            .Select(a => new
+            {
+                Application = a,
+                // The creation row is stamped when I logged it, not when I applied, so it
+                // would make a backdated application look fresh. AppliedAt covers it instead.
+                LastChange = a.History
+                    .Where(h => h.FromStatus != null)
+                    .Max(h => (DateTimeOffset?)h.ChangedAt),
+            })
+            .ToListAsync(ct);
+
+        var moved = 0;
+
+        foreach (var c in candidates)
+        {
+            var a = c.Application;
+            var lastActivity = Latest(a.AppliedAt, a.LastEmailAt, c.LastChange);
+
+            if (!ApplicationStatusRules.IsStale(a.Status, lastActivity, at, afterDays)) continue;
+
+            var from = a.Status;
+            a.Status = ApplicationStatus.NoResponse;
+
+            db.ApplicationStatusChanges.Add(new ApplicationStatusChange
+            {
+                JobApplicationId = a.Id,
+                FromStatus = from,
+                ToStatus = ApplicationStatus.NoResponse,
+                ChangedAt = at,
+                Source = StatusChangeSource.AgeRule,
+                Note = $"Nothing heard for {afterDays} days",
+            });
+
+            moved++;
+        }
+
+        if (moved > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Marked {Count} application(s) as NoResponse after {Days} days of silence",
+                moved, afterDays);
+        }
+
+        return moved;
+    }
+
+    private static DateTimeOffset Latest(DateTimeOffset first, params DateTimeOffset?[] others) =>
+        others.Where(o => o is not null).Select(o => o!.Value).Append(first).Max();
 
     public async Task UpdateNotesAsync(int applicationId, string? notes, CancellationToken ct = default)
     {

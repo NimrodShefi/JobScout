@@ -28,7 +28,7 @@ else
     @if (_companiesNeedingUrl > 0)
     {
         <div class="alert info">
-            @_companiesNeedingUrl compan@(_companiesNeedingUrl == 1 ? "y is" : "ies are") set to USE but @(_companiesNeedingUrl == 1 ? "has" : "have") no careers URL, so @(_companiesNeedingUrl == 1 ? "it is" : "they are") skipped by the morning scan.
+            @_companiesNeedingUrl compan@(_companiesNeedingUrl == 1 ? "y is" : "ies are") set to USE but @(_companiesNeedingUrl == 1 ? "has" : "have") no careers URL or job-board feed, so @(_companiesNeedingUrl == 1 ? "it is" : "they are") skipped by the morning scan.
             <a href="/companies?filter=needs-url">Fix that</a>.
         </div>
     }
@@ -223,7 +223,8 @@ else
         _companiesReview = await db.Companies.CountAsync(c => c.Status == CompanyStatus.REVIEW);
 
         _companiesNeedingUrl = await db.Companies
-            .CountAsync(c => c.Status == CompanyStatus.USE && (c.Url == null || c.Url == ""));
+            .CountAsync(c => c.Status == CompanyStatus.USE && (c.Url == null || c.Url == "") &&
+                             (c.AtsKind == AtsKind.None || c.AtsToken == null || c.AtsToken == ""));
 
         var open = new[]
         {

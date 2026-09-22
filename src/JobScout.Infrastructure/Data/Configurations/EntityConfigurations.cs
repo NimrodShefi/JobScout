@@ -16,11 +16,14 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
         e.Property(x => x.BoardUrl).HasMaxLength(1000);
         e.Property(x => x.Source).IsRequired().HasMaxLength(100);
         e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        e.Property(x => x.AtsKind).HasConversion<string>().HasMaxLength(20);
+        e.Property(x => x.AtsToken).HasMaxLength(200);
 
         e.HasIndex(x => x.NormalisedName).IsUnique();
         e.HasIndex(x => x.Status);
 
         e.Ignore(x => x.NeedsCareersUrl);
+        e.Ignore(x => x.HasAtsFeed);
     }
 }
 

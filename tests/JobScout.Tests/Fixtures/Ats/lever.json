@@ -1,0 +1,78 @@
+[
+  {
+    "additionalPlain": "At Scott Logic, we value the flexibility of remote working alongside the value gained from spending time with our colleagues and clients. In our offices you’ll find employee-led clubs and events, as well as free games, books, and refreshments. \n \nWe have shared values that govern our behaviour toward others and the environment. We are proud to be a B Corp, a global movement of businesses driving f",
+    "additional": "<div><span style=\"font-size: 16px;\">At Scott Logic, we value the flexibility of remote working alongside the value gained from spending time with our colleagues and clients. In our offices you’ll find employee-led clubs and events, as well as free games, books, and refreshments.&nbsp;</span></div>\n<div><span style=\"font-size: 16px;\">&nbsp;</span></div>\n<div><span style=\"font-size: 16px;\">We have s",
+    "categories": {
+      "commitment": "Full-Time",
+      "location": "Bristol",
+      "team": "Development",
+      "allLocations": [
+        "Bristol"
+      ]
+    },
+    "createdAt": 1788947618236,
+    "descriptionPlain": "Our Data Engineering roles require the eligibility for SC clearance, please check the GOV.UK website for the requirements before you apply.\n\nWe work with some of the UK’s biggest companies and government departments to provide a pragmatic approach to technology, delivering bespoke software solutions and expert advice. \n \nOur clients are increasingly looking to us to help them make the best use of ",
+    "description": "<div><span style=\"font-size: 11pt;\"><strong><span data-olk-copy-source=\"MessageBody\">Our Data Engineering roles require the eligibility for SC clearance, please check the GOV.UK website for the requirements before you apply.</span></strong><br><br>We work with some of the UK’s biggest companies and government departments to provide a pragmatic approach to technology, delivering bespoke software so",
+    "id": "46628ab4-a3ec-45e7-98a4-921cdd57a3ca",
+    "lists": [
+      {
+        "text": "What are we looking for? ",
+        "content": "\n<li>Good experience with some of the technologies and approaches typical in modern data engineering and reporting. Including storage, data pipelines to ingest and transform data, and querying &amp; reporting of analytical data.&nbsp;</li>\n<li>You've worked with technologies such as Python, Spark, SQL, Pyspark, PowerBI etc.</li>\n<li>You’ve got a background in software engineering, including Front "
+      },
+      {
+        "text": "It would be great if you have:",
+        "content": "\n<li>Experience of relevant cloud services within AWS, Azure or GCP.</li>\n<li>Experience working in an Agile environment.</li>\n<li>Experience working with common vendor products such as Snowflake or Data Bricks.</li>\n<li>Experience working with CI/CD tooling.</li>\n"
+      }
+    ],
+    "text": "Data Engineer",
+    "country": "GB",
+    "workplaceType": "hybrid",
+    "opening": "",
+    "openingPlain": "",
+    "descriptionBody": "<div><span style=\"font-size: 11pt;\"><strong><span data-olk-copy-source=\"MessageBody\">Our Data Engineering roles require the eligibility for SC clearance, please check the GOV.UK website for the requirements before you apply.</span></strong><br><br>We work with some of the UK&rsquo;s biggest companies and government departments to provide a pragmatic approach to technology, delivering bespoke softw",
+    "descriptionBodyPlain": "Our Data Engineering roles require the eligibility for SC clearance, please check the GOV.UK website for the requirements before you apply.\n\nWe work with some of the UK’s biggest companies and government departments to provide a pragmatic approach to technology, delivering bespoke software solutions and expert advice. \n \nOur clients are increasingly looking to us to help them make the best use of ",
+    "hostedUrl": "https://jobs.lever.co/scottlogic/46628ab4-a3ec-45e7-98a4-921cdd57a3ca",
+    "applyUrl": "https://jobs.lever.co/scottlogic/46628ab4-a3ec-45e7-98a4-921cdd57a3ca/apply"
+  },
+  {
+    "additionalPlain": "At Scott Logic, we value the flexibility of remote working alongside the value gained from spending time with our colleagues and clients. In our offices you’ll find employee-led clubs and events, as well as free games, books, and refreshments. \n \nWe have shared values that govern our behaviour toward others and the environment. We are proud to be a B Corp, a global movement of businesses driving f",
+    "additional": "<div>\n<div>At Scott Logic, we value the flexibility of remote working alongside the value gained from spending time with our colleagues and clients. In our offices you’ll find employee-led clubs and events, as well as free games, books, and refreshments.&nbsp;</div>\n<div>&nbsp;</div>\n<div>We have shared values that govern our behaviour toward others and the environment. We are proud to be a B Corp",
+    "categories": {
+      "commitment": "Full-Time",
+      "location": "Bristol",
+      "team": "Development",
+      "allLocations": [
+        "Bristol"
+      ]
+    },
+    "createdAt": 1775032276017,
+    "descriptionPlain": "At Scott Logic we have a reputation for World Class software engineering. We are trusted by some of the world’s leading organisations to build state of the art, scalable and critical IT solutions. As well as building leading software solutions, our customer engagements include designing and building business critical data solutions. Our Data Architects and Data Engineers work with customers across",
+    "description": "<div>\n<p>At Scott Logic we have a reputation for World Class software engineering. We are trusted by some of the world’s leading organisations to build state of the art, scalable and critical IT solutions. As well as building leading software solutions, our customer engagements include designing and building business critical data solutions. Our Data Architects and Data Engineers work with custome",
+    "id": "f257f60f-c179-4c79-b74b-9ab0c87ec46d",
+    "lists": [
+      {
+        "text": "Responsibilities include ",
+        "content": "\n<li><strong>Commercially Minded</strong>: Have an entrepreneurial and innovative mindset. Always looking at how we can help customers and, at the same time, grow our business.</li>\n<li><strong>Strategy and Vision</strong>: Define the vision and roadmap for Scott Logic’s data practice, including developing our service offerings (e.g. data platform design, data governance, advanced analytics, etc.)"
+      },
+      {
+        "text": "Experience that would help",
+        "content": "\n<li><strong>&nbsp;Data Consulting</strong>: 5+ years of experience in data consulting or a related data role (e.g. Data Science or User Focused Data Engineering).</li>\n<li><strong>Worked in a data consultancy</strong>: 2+ years of experience in a company with strong data consulting services.</li>\n<li><strong>End to end delivery</strong>: Experience driving the full data lifecycle, from strategy a"
+      }
+    ],
+    "text": "Data Practice Lead",
+    "country": "GB",
+    "workplaceType": "remote",
+    "opening": "",
+    "openingPlain": "",
+    "descriptionBody": "<div>\n<p>At Scott Logic we have a reputation for World Class software engineering. We are trusted by some of the world&rsquo;s leading organisations to build state of the art, scalable and critical IT solutions. As well as building leading software solutions, our customer engagements include designing and building business critical data solutions. Our Data Architects and Data Engineers work with c",
+    "descriptionBodyPlain": "At Scott Logic we have a reputation for World Class software engineering. We are trusted by some of the world’s leading organisations to build state of the art, scalable and critical IT solutions. As well as building leading software solutions, our customer engagements include designing and building business critical data solutions. Our Data Architects and Data Engineers work with customers across",
+    "hostedUrl": "https://jobs.lever.co/scottlogic/f257f60f-c179-4c79-b74b-9ab0c87ec46d",
+    "applyUrl": "https://jobs.lever.co/scottlogic/f257f60f-c179-4c79-b74b-9ab0c87ec46d/apply",
+    "salaryRange": {
+      "min": 55000,
+      "max": 70000,
+      "currency": "GBP",
+      "interval": "per-year-salary"
+    }
+  }
+]

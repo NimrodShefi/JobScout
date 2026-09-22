@@ -1,6 +1,7 @@
 using JobScout.Core.Abstractions;
 using JobScout.Core.Options;
 using JobScout.Infrastructure.Ai;
+using JobScout.Infrastructure.Ats;
 using JobScout.Infrastructure.Boards;
 using JobScout.Infrastructure.Cv;
 using JobScout.Infrastructure.Data;
@@ -152,6 +153,26 @@ public static class DependencyInjection
             .AddStandardResilienceHandler();
 
         services.AddSingleton<IJobBoardProvider, AdzunaJobBoardProvider>();
+
+        return services;
+    }
+
+    /// <summary>Registers the job-board feeds (Greenhouse, Lever, Ashby, Workable). They are
+    /// resolved as a collection, keyed by the service each one reads.</summary>
+    public static IServiceCollection AddJobScoutAts(this IServiceCollection services)
+    {
+        services.AddHttpClient(AtsFeedBase.HttpClientName)
+            .ConfigureHttpClient(client =>
+            {
+                client.Timeout = Timeout.InfiniteTimeSpan; // Owned by the resilience pipeline.
+                client.DefaultRequestHeaders.Accept.Add(new("application/json"));
+            })
+            .AddStandardResilienceHandler();
+
+        services.AddSingleton<IAtsFeed, GreenhouseFeed>();
+        services.AddSingleton<IAtsFeed, LeverFeed>();
+        services.AddSingleton<IAtsFeed, AshbyFeed>();
+        services.AddSingleton<IAtsFeed, WorkableFeed>();
 
         return services;
     }

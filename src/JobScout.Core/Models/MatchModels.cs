@@ -47,6 +47,10 @@ public sealed record ExtractedJob
     public decimal? SalaryMax { get; init; }
     public string? SalaryCurrency { get; init; }
     public bool IsRemote { get; init; }
+
+    /// <summary>When the advert was published, if the source says. Job-board feeds do;
+    /// careers pages read by the AI do not.</summary>
+    public DateTimeOffset? PostedAt { get; init; }
 }
 
 /// <summary>Classification of one inbound email against my open applications.</summary>

@@ -1,9 +1,13 @@
 @page "/companies"
 @rendermode InteractiveServer
+@using JobScout.Core.Abstractions
 @using JobScout.Core.Services
+@using JobScout.Infrastructure.Services
 @using JobScout.Web.Services
 @inject IDbContextFactory<JobScoutDbContext> DbFactory
 @inject JobScheduler Scheduler
+@inject AtsService Ats
+@inject IPageFetcher PageFetcher
 @inject Display Fmt
 
 <PageTitle>Companies - JobScout</PageTitle>
@@ -12,6 +16,12 @@
 <p class="page-sub">
     USE companies are scanned every morning. REVIEW companies came from a job board and are
     waiting for your decision. NOT_USE companies are kept so they are not rediscovered endlessly.
+</p>
+<p class="page-sub">
+    A company with a <strong>job-board feed</strong> (Greenhouse, Lever, Ashby or Workable) is read
+    from that feed instead of its careers page: complete adverts, no AI call. Feeds are found
+    automatically; you can also pick the service and type its token, or paste a board URL such as
+    <code>https://jobs.lever.co/acme</code> into the token box.
 </p>
 
 @if (_message is not null)
@@ -57,7 +67,7 @@
             {
                 <option value="@status">@status</option>
             }
-            <option value="needs-url">Needs careers URL</option>
+            <option value="needs-url">Nothing to scan</option>
         </select>
     </div>
     <div class="field">
@@ -86,6 +96,7 @@ else
                     <th>Company</th>
                     <th>Status</th>
                     <th style="min-width:280px">Careers URL</th>
+                    <th style="min-width:300px">Job-board feed</th>
                     <th>Board</th>
                     <th>Source</th>
                     <th style="width:70px">Jobs</th>
@@ -101,7 +112,7 @@ else
                             @row.Name
                             @if (row.NeedsUrl)
                             {
-                                <span class="badge warn" style="margin-left:6px">needs careers URL</span>
+                                <span class="badge warn" style="margin-left:6px">needs careers URL or feed</span>
                             }
                         </td>
                         <td>
@@ -116,6 +127,26 @@ else
                             <input type="url" style="width:100%" placeholder="https://..."
                                    value="@row.Url"
                                    @onchange="e => SaveUrl(row.Id, e)" />
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:6px;align-items:center">
+                                <select value="@row.AtsKind" title="Job-board service"
+                                        @onchange="e => SaveAtsKind(row.Id, e)">
+                                    @foreach (var kind in Enum.GetValues<AtsKind>())
+                                    {
+                                        <option value="@kind">@(kind == AtsKind.None ? "none" : kind.ToString())</option>
+                                    }
+                                </select>
+                                <input type="text" style="width:130px" placeholder="token or board URL"
+                                       title="The company's token on the service, or paste its board URL"
+                                       value="@row.AtsToken"
+                                       @onchange="e => SaveAtsToken(row.Id, e)" />
+                                <button title="Look for a job-board feed from the careers URL, the careers page and the company name"
+                                        disabled="@(row.HasFeed || _detecting.Contains(row.Id))"
+                                        @onclick="() => Detect(row.Id)">
+                                    @(_detecting.Contains(row.Id) ? "..." : "Detect")
+                                </button>
+                            </div>
                         </td>
                         <td class="small">
                             @if (!string.IsNullOrWhiteSpace(row.BoardUrl))
@@ -165,6 +196,7 @@ else
     private string _search = string.Empty;
 
     private List<Row> _rows = [];
+    private readonly HashSet<int> _detecting = [];
 
     private bool CanAdd => !string.IsNullOrWhiteSpace(_newName);
 
@@ -188,7 +220,8 @@ else
         var query = db.Companies.AsNoTracking().AsQueryable();
 
         if (_filterStatus == "needs-url")
-            query = query.Where(c => c.Status == CompanyStatus.USE && (c.Url == null || c.Url == ""));
+            query = query.Where(c => c.Status == CompanyStatus.USE && (c.Url == null || c.Url == "") &&
+                                     (c.AtsKind == AtsKind.None || c.AtsToken == null || c.AtsToken == ""));
         else if (Enum.TryParse<CompanyStatus>(_filterStatus, out var status))
             query = query.Where(c => c.Status == status);
 
@@ -203,7 +236,7 @@ else
             .ThenBy(c => c.Name)
             .Select(c => new Row(
                 c.Id, c.Name, c.Status, c.Url, c.BoardUrl, c.Source,
-                c.LastCheckedAt, c.Listings.Count))
+                c.LastCheckedAt, c.Listings.Count, c.AtsKind, c.AtsToken))
             .ToListAsync();
 
         _loading = false;
@@ -329,6 +362,139 @@ else
         await LoadAsync();
     }
 
+    private async Task SaveAtsKind(int companyId, ChangeEventArgs e)
+    {
+        _message = _error = null;
+
+        if (!Enum.TryParse<AtsKind>(e.Value?.ToString(), out var kind)) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+        if (company is null) return;
+
+        company.AtsKind = kind;
+        if (kind == AtsKind.None) company.AtsToken = null;
+
+        await db.SaveChangesAsync();
+
+        _message = kind == AtsKind.None
+            ? $"{company.Name} will be read from its careers page."
+            : string.IsNullOrWhiteSpace(company.AtsToken)
+                ? $"Now type {company.Name}'s {kind} token, or paste its board URL."
+                : $"{company.Name} will be read from its {kind} feed.";
+
+        await LoadAsync();
+    }
+
+    private async Task SaveAtsToken(int companyId, ChangeEventArgs e)
+    {
+        _message = _error = null;
+
+        var value = e.Value?.ToString()?.Trim();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+        if (company is null) return;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            company.AtsKind = AtsKind.None;
+            company.AtsToken = null;
+            await db.SaveChangesAsync();
+
+            _message = $"Feed cleared. {company.Name} will be read from its careers page.";
+            await LoadAsync();
+            return;
+        }
+
+        // A pasted board URL names both the service and the token.
+        if (value.Contains('/') || value.Contains('.'))
+        {
+            if (AtsLocator.TryParseUrl(value) is not { } reference)
+            {
+                _error = "That URL is not a Greenhouse, Lever, Ashby or Workable board.";
+                await LoadAsync();
+                return;
+            }
+
+            company.AtsKind = reference.Kind;
+            company.AtsToken = reference.Token;
+        }
+        else
+        {
+            if (company.AtsKind == AtsKind.None)
+            {
+                _error = "Pick the service first, or paste the full board URL.";
+                await LoadAsync();
+                return;
+            }
+
+            company.AtsToken = value;
+        }
+
+        await db.SaveChangesAsync();
+
+        // Check it straight away rather than finding out at 07:00 tomorrow.
+        var jobs = await Ats.FetchAsync(company.AtsKind, company.AtsToken!);
+
+        if (jobs is null)
+            _error = $"Saved, but {company.AtsKind} has no board '{company.AtsToken}' - check the token.";
+        else
+            _message = $"{company.Name} will be read from its {company.AtsKind} feed ({jobs.Count} advert(s) on it now).";
+
+        await LoadAsync();
+    }
+
+    private async Task Detect(int companyId)
+    {
+        _message = _error = null;
+
+        if (!Ats.Enabled)
+        {
+            _error = "Job-board feeds are turned off (JobScout:Ats:Enabled).";
+            return;
+        }
+
+        var row = _rows.FirstOrDefault(r => r.Id == companyId);
+        if (row is null) return;
+
+        _detecting.Add(companyId);
+        StateHasChanged();
+
+        try
+        {
+            var found = await Ats.DetectAsync(row.Name, row.Url);
+
+            // The careers page itself often links to or embeds the board.
+            if (found is null && !string.IsNullOrWhiteSpace(row.Url))
+            {
+                var page = await PageFetcher.FetchAsync(row.Url);
+                if (page.Success) found = await Ats.DetectFromHtmlAsync(page.Html);
+            }
+
+            await Ats.SaveDetectionAsync(companyId, found);
+
+            if (found is null)
+            {
+                _message = $"No job-board feed found for {row.Name}. It will keep being read from its careers page.";
+            }
+            else
+            {
+                _message = $"{row.Name} is on {found.Kind} as '{found.Token}' ({found.Jobs.Count} advert(s) on it now)." +
+                           (found.Guessed ? " That was guessed from the name - check the adverts are really theirs." : "") +
+                           " Its adverts will be read from the feed from the next morning scan.";
+            }
+        }
+        finally
+        {
+            _detecting.Remove(companyId);
+        }
+
+        await LoadAsync();
+    }
+
     private async Task Delete(int companyId)
     {
         await using var db = await DbFactory.CreateDbContextAsync();
@@ -346,8 +512,10 @@ else
 
     private sealed record Row(
         int Id, string Name, CompanyStatus Status, string? Url, string? BoardUrl,
-        string Source, DateTimeOffset? LastCheckedAt, int ListingCount)
+        string Source, DateTimeOffset? LastCheckedAt, int ListingCount, AtsKind AtsKind, string? AtsToken)
     {
-        public bool NeedsUrl => Status == CompanyStatus.USE && string.IsNullOrWhiteSpace(Url);
+        public bool HasFeed => AtsKind != AtsKind.None && !string.IsNullOrWhiteSpace(AtsToken);
+
+        public bool NeedsUrl => Status == CompanyStatus.USE && string.IsNullOrWhiteSpace(Url) && !HasFeed;
     }
 }

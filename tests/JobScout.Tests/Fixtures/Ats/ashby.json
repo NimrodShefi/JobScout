@@ -1,0 +1,158 @@
+{
+  "jobs": [
+    {
+      "id": "c8ff3829-6070-4cce-944a-3e90e9429384",
+      "title": "Financial Reporting Manager",
+      "department": "ClearBank Group Holdings",
+      "team": "Financial Control",
+      "employmentType": "FullTime",
+      "location": "London Office - Hybrid",
+      "shouldDisplayCompensationOnJobPostings": false,
+      "secondaryLocations": [],
+      "publishedAt": "2026-08-24T09:53:08.543+00:00",
+      "isListed": true,
+      "isRemote": true,
+      "workplaceType": "Hybrid",
+      "address": {
+        "postalAddress": {
+          "addressRegion": "London",
+          "addressCountry": "United Kingdom",
+          "addressLocality": "London - Hybrid"
+        }
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/clearbank/c8ff3829-6070-4cce-944a-3e90e9429384",
+      "applyUrl": "https://jobs.ashbyhq.com/clearbank/c8ff3829-6070-4cce-944a-3e90e9429384/application",
+      "descriptionHtml": "<p style=\"min-height:1.5em\"><strong>Financial Reporting Manager</strong></p><p style=\"min-height:1.5em\"><strong>About ClearBank</strong></p><p style=\"min-height:1.5em\">ClearBank is a technology enabled clearing bank, built on a modern cloud-based platform. We provide real-time clearing and embedded banking services, enabling our clients to build better financial services. Our culture is grounded i",
+      "descriptionPlain": "Financial Reporting Manager\n\nAbout ClearBank\n\nClearBank is a technology enabled clearing bank, built on a modern cloud-based platform. We provide real-time clearing and embedded banking services, enabling our clients to build better financial services. Our culture is grounded in trust, ownership, and collaboration, empowering our people to deliver meaningful impact for our clients and each other.\n",
+      "compensation": {
+        "compensationTierSummary": null,
+        "scrapeableCompensationSalarySummary": null,
+        "compensationTiers": [],
+        "summaryComponents": []
+      }
+    },
+    {
+      "id": "89dda110-f00e-4876-ab0e-b6cea9c17f01",
+      "title": "Engineering Manager ",
+      "department": "ClearBank Group Holdings",
+      "team": "FX/MCCY/IC",
+      "employmentType": "FullTime",
+      "location": "London Office - Hybrid",
+      "shouldDisplayCompensationOnJobPostings": false,
+      "secondaryLocations": [],
+      "publishedAt": "2026-02-04T14:59:34.626+00:00",
+      "isListed": true,
+      "isRemote": null,
+      "workplaceType": null,
+      "address": {
+        "postalAddress": {
+          "addressRegion": "London",
+          "addressCountry": "United Kingdom",
+          "addressLocality": "London - Hybrid"
+        }
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/clearbank/89dda110-f00e-4876-ab0e-b6cea9c17f01",
+      "applyUrl": "https://jobs.ashbyhq.com/clearbank/89dda110-f00e-4876-ab0e-b6cea9c17f01/application",
+      "descriptionHtml": "<p style=\"min-height:1.5em\"><strong>About us</strong></p><p style=\"min-height:1.5em\">ClearBank was built on the belief that banking infrastructure would no longer slow down progress. Instead, it’s the catalyst that unlocks the potential to innovate. That’s why our clients — financial institutions from fintech’s and crypto platforms, to banks and credit unions — use our API to power their banking i",
+      "descriptionPlain": "About us\n\nClearBank was built on the belief that banking infrastructure would no longer slow down progress. Instead, it’s the catalyst that unlocks the potential to innovate. That’s why our clients — financial institutions from fintech’s and crypto platforms, to banks and credit unions — use our API to power their banking infrastructure.\n\nBut we wouldn’t be ClearBank without our people. They’re wh",
+      "compensation": {
+        "summaryComponents": [
+          {
+            "compensationType": "Salary",
+            "interval": "1 YEAR",
+            "currencyCode": "GBP",
+            "minValue": 60000,
+            "maxValue": 75000
+          }
+        ]
+      }
+    },
+    {
+      "id": "4eab0666-373a-4871-9aab-66c15fdbd94e",
+      "title": "Engineering Manager - Customer and Regulatory Reporting",
+      "department": "ClearBank Group Holdings",
+      "team": "Account Foundations",
+      "employmentType": "FullTime",
+      "location": "London Office - Hybrid",
+      "shouldDisplayCompensationOnJobPostings": false,
+      "secondaryLocations": [],
+      "publishedAt": "2026-06-12T13:19:40.126+00:00",
+      "isListed": false,
+      "isRemote": null,
+      "workplaceType": null,
+      "address": {
+        "postalAddress": {
+          "addressRegion": "London",
+          "addressCountry": "United Kingdom",
+          "addressLocality": "London - Hybrid"
+        }
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/clearbank/4eab0666-373a-4871-9aab-66c15fdbd94e",
+      "applyUrl": "https://jobs.ashbyhq.com/clearbank/4eab0666-373a-4871-9aab-66c15fdbd94e/application",
+      "descriptionHtml": "<p style=\"min-height:1.5em\"><strong>About us</strong></p><p style=\"min-height:1.5em\">ClearBank was built on the belief that banking infrastructure would no longer slow down progress. Instead, it’s the catalyst that unlocks the potential to innovate. That’s why our clients — financial institutions from fintech’s and crypto platforms, to banks and credit unions use our API to power their banking inf",
+      "descriptionPlain": "About us\n\nClearBank was built on the belief that banking infrastructure would no longer slow down progress. Instead, it’s the catalyst that unlocks the potential to innovate. That’s why our clients — financial institutions from fintech’s and crypto platforms, to banks and credit unions use our API to power their banking infrastructure.\n\nBut we wouldn’t be ClearBank without our people. They’re what",
+      "compensation": {
+        "compensationTierSummary": null,
+        "scrapeableCompensationSalarySummary": null,
+        "compensationTiers": [],
+        "summaryComponents": []
+      }
+    },
+    {
+      "id": "f0a9f480-26c1-489c-bb26-310ca8c7dabb",
+      "title": "Engineering Manager (Platform - Application Excellence)",
+      "department": "Product & Engineering",
+      "team": "Engineering",
+      "employmentType": "FullTime",
+      "location": "UK",
+      "shouldDisplayCompensationOnJobPostings": true,
+      "secondaryLocations": [
+        {
+          "location": "Portugal",
+          "address": {
+            "postalAddress": {
+              "addressRegion": "",
+              "addressCountry": "Portugal",
+              "addressLocality": ""
+            }
+          }
+        },
+        {
+          "location": "Ireland",
+          "address": {
+            "postalAddress": {
+              "addressCountry": "Ireland",
+              "addressLocality": ""
+            }
+          }
+        }
+      ],
+      "publishedAt": "2026-07-06T18:09:11.444+00:00",
+      "isListed": true,
+      "isRemote": true,
+      "workplaceType": "Remote",
+      "address": {
+        "postalAddress": {
+          "addressCountry": "UK",
+          "addressLocality": ""
+        }
+      },
+      "jobUrl": "https://jobs.ashbyhq.com/paddle/f0a9f480-26c1-489c-bb26-310ca8c7dabb",
+      "applyUrl": "https://jobs.ashbyhq.com/paddle/f0a9f480-26c1-489c-bb26-310ca8c7dabb/application",
+      "descriptionHtml": "<h2>What do we do?</h2><p style=\"min-height:1.5em\">Paddle offers digital product companies a completely different approach to their payment infrastructure. Instead of assembling and maintaining a complex stack of payments-related apps and services, we’re a Merchant of Record for our customers. That ",
+      "descriptionPlain": "WHAT DO WE DO?\n\nPaddle offers digital product companies a completely different approach to their payment infrastructure. Instead of assembling and maintaining a complex stack of payments-related apps and services, we’re a Merchant of Record for our customers. That means we take away 100% of the pain",
+      "compensation": {
+        "summaryComponents": [
+          {
+            "compensationType": "Salary",
+            "interval": "1 YEAR",
+            "currencyCode": "USD",
+            "minValue": 0,
+            "maxValue": 0
+          }
+        ]
+      }
+    }
+  ],
+  "apiVersion": "1"
+}

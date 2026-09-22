@@ -31,8 +31,23 @@ public class Company
 
     public string? Notes { get; set; }
 
+    /// <summary>The job-board service behind the careers page, when there is one.</summary>
+    public AtsKind AtsKind { get; set; } = AtsKind.None;
+
+    /// <summary>The company's identifier on that service, e.g. "monzo" in
+    /// boards.greenhouse.io/monzo.</summary>
+    public string? AtsToken { get; set; }
+
+    /// <summary>When automatic feed detection last looked at this company, so a company with
+    /// no feed is not probed again every morning.</summary>
+    public DateTimeOffset? AtsCheckedAt { get; set; }
+
     public List<JobListing> Listings { get; set; } = [];
 
-    /// <summary>True when the company is in scope for scanning but has no careers page yet.</summary>
-    public bool NeedsCareersUrl => Status == CompanyStatus.USE && string.IsNullOrWhiteSpace(Url);
+    /// <summary>True when the adverts can be read from a job-board feed.</summary>
+    public bool HasAtsFeed => AtsKind != AtsKind.None && !string.IsNullOrWhiteSpace(AtsToken);
+
+    /// <summary>True when the company is in scope for scanning but there is nothing to scan:
+    /// no careers page and no job-board feed.</summary>
+    public bool NeedsCareersUrl => Status == CompanyStatus.USE && string.IsNullOrWhiteSpace(Url) && !HasAtsFeed;
 }

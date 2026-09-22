@@ -62,6 +62,7 @@ try
     builder.Services.AddJobScoutFetching();
     builder.Services.AddJobScoutCv();
     builder.Services.AddJobScoutBoards();
+    builder.Services.AddJobScoutAts();
     builder.Services.AddJobScoutEmail();
 
     // -----------------------------------------------------------------------
@@ -72,6 +73,7 @@ try
     builder.Services.AddSingleton<EmailProcessingService>();
     builder.Services.AddSingleton<ApplicationService>();
     builder.Services.AddSingleton<AppConfigService>();
+    builder.Services.AddSingleton<AtsService>();
 
     // -----------------------------------------------------------------------
     // Scheduled jobs. Cron expressions and the time zone come from config. The

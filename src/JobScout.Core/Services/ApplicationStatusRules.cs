@@ -43,4 +43,19 @@ public static class ApplicationStatusRules
 
         return Rank(to) > Rank(from);
     }
+
+    /// <summary>Statuses the no-response rule may act on. An acknowledgement is usually an
+    /// auto-reply, so it does not count as the company engaging.</summary>
+    public static bool IsAwaitingReply(ApplicationStatus status) =>
+        status is ApplicationStatus.Applied or ApplicationStatus.Acknowledged;
+
+    /// <summary>True when an application awaiting a reply has had no activity for
+    /// <paramref name="afterDays"/> days. <paramref name="lastActivity"/> is the latest of the
+    /// application date, the last related email and the last status change. Zero or fewer
+    /// days means the rule is off.</summary>
+    public static bool IsStale(
+        ApplicationStatus status, DateTimeOffset lastActivity, DateTimeOffset now, int afterDays) =>
+        afterDays > 0 &&
+        IsAwaitingReply(status) &&
+        now - lastActivity >= TimeSpan.FromDays(afterDays);
 }

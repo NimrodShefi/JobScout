@@ -11,6 +11,17 @@ public enum CompanyStatus
     REVIEW = 2,
 }
 
+/// <summary>The hosted job-board service a company publishes its adverts through. Each one
+/// has a public JSON feed, which is read instead of scraping the careers page.</summary>
+public enum AtsKind
+{
+    None = 0,
+    Greenhouse = 1,
+    Lever = 2,
+    Ashby = 3,
+    Workable = 4,
+}
+
 public enum JobListingStatus
 {
     New = 0,
@@ -46,6 +57,8 @@ public enum StatusChangeSource
     Manual = 0,
     EmailAutomatic = 1,
     EmailSuggestionAccepted = 2,
+    /// <summary>The no-response rule: nothing heard for the configured number of days.</summary>
+    AgeRule = 3,
 }
 
 /// <summary>How a job run ended, as the dashboard reports it. A run that finished but hit

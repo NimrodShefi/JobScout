@@ -13,6 +13,8 @@ public sealed class JobScoutOptions
     public SchedulingOptions Scheduling { get; set; } = new();
     public ScoringOptions Scoring { get; set; } = new();
     public DiscoveryOptions Discovery { get; set; } = new();
+    public ApplicationOptions Applications { get; set; } = new();
+    public AtsOptions Ats { get; set; } = new();
 }
 
 public enum AiProvider
@@ -172,4 +174,34 @@ public sealed class DiscoveryOptions
     /// work through it. Whatever the boards found beyond the cap is simply picked up by the
     /// next run.</summary>
     public int MaxNewCompaniesPerRun { get; set; } = 5;
+}
+
+public sealed class ApplicationOptions
+{
+    /// <summary>An application still at Applied or Acknowledged this many days after its last
+    /// sign of life is marked NoResponse by the evening email check. Zero turns the rule off.</summary>
+    public int NoResponseAfterDays { get; set; } = 21;
+}
+
+/// <summary>Reading companies' job-board feeds (Greenhouse, Lever, Ashby, Workable) instead of
+/// scraping their careers pages.</summary>
+public sealed class AtsOptions
+{
+    /// <summary>Off means every company is read from its careers page, as before.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>At the start of the morning scan, look for a feed behind USE companies that do
+    /// not have one yet: from the careers URL, then by guessing the token from the name.
+    /// Feeds linked from a careers page are picked up during the scan either way.</summary>
+    public bool DetectAutomatically { get; set; } = true;
+
+    /// <summary>How many companies one morning scan may probe. Each probe costs up to one
+    /// request per service per guessed token.</summary>
+    public int MaxDetectionsPerRun { get; set; } = 5;
+
+    /// <summary>A company where no feed was found is not probed again for this many days.</summary>
+    public int RecheckAfterDays { get; set; } = 14;
+
+    /// <summary>Advert descriptions from the feeds are truncated to this.</summary>
+    public int MaxDescriptionChars { get; set; } = 20_000;
 }

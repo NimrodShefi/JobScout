@@ -15,8 +15,8 @@ Three jobs run on a schedule inside the app:
 
 | Job | Default time | What it does |
 |---|---|---|
-| **Morning scan** | 07:00 | Fetches every `USE` company's careers page, extracts the adverts with the AI, drops anything outside your cities or below your minimum salary, upserts by URL, then scores everything new or unscored. |
-| **Email check** | 19:00 | Reads new mail, matches each message to an open application and classifies it. Confident matches update the status; unsure ones become suggestions for you to confirm. |
+| **Morning scan** | 07:00 | Reads every `USE` company's adverts - from its [job-board feed](#job-board-feeds) when it has one, otherwise from its careers page with the AI - drops anything outside your cities or below your minimum salary, upserts by URL, then scores everything new or unscored. |
+| **Email check** | 19:00 | Reads new mail, matches each message to an open application and classifies it. Confident matches update the status; unsure ones become suggestions for you to confirm. Then marks applications that have heard nothing for 21 days as [no response](#no-response-rule). |
 | **Discovery** | 19:30 | Queries each enabled job board for every active industry × city. New companies land as `REVIEW` with a board link and no careers URL. Their listings are saved but **not scored** until you move the company to `USE`. |
 
 Each job has a **Run now** button on the *Job runs* page and writes one summary row to
@@ -314,6 +314,77 @@ dotnet user-secrets set "JobScout:Boards:Adzuna:AppKey" "<app key>" --project sr
 options section — register it in `AddJobScoutBoards` and discovery picks it up automatically,
 because it resolves `IEnumerable<IJobBoardProvider>` and asks every enabled one.
 
+### Job-board feeds
+
+Many companies publish their adverts through a hosted job-board service rather than their
+own site. When one of these is behind a `USE` company, the morning scan reads the service's
+public JSON feed **instead of** the careers page:
+
+| Service | Board URL looks like | Feed |
+|---|---|---|
+| Greenhouse | `boards.greenhouse.io/acme`, `job-boards.greenhouse.io/acme` | `boards-api.greenhouse.io/v1/boards/acme/jobs?content=true` |
+| Lever | `jobs.lever.co/acme` | `api.lever.co/v0/postings/acme?mode=json` |
+| Ashby | `jobs.ashbyhq.com/acme` | `api.ashbyhq.com/posting-api/job-board/acme` |
+| Workable | `apply.workable.com/acme` | `apply.workable.com/api/v1/widget/accounts/acme?details=true` |
+
+A feed gives complete adverts with full descriptions, posting dates and sometimes salaries,
+needs **no AI call** to pull the adverts out, and is not affected by bot protection. Listings
+from a feed show the service name (e.g. `Greenhouse`) as their source.
+
+**How a company's feed is found**, cheapest first:
+
+1. **During the scan, from the careers page.** A page that embeds its Greenhouse board or links
+   its adverts to `jobs.lever.co/...` gives the feed away. It is adopted on the spot, and that
+   day's adverts come from the feed.
+2. **Before the scan, for up to 5 companies without one** (companies with no careers URL first).
+   The careers URL is checked for a board address, then the token is guessed from the name
+   (`Funding Circle` → `fundingcircle`, `funding-circle`) against each service. A company
+   where nothing is found is not probed again for 14 days.
+3. **By hand** on the Companies page: pick the service and type the token, paste the board
+   URL into the token box, or press **Detect**.
+
+A board named by a URL or linked from the page is trusted even when it has no adverts open.
+A **guessed** board must have adverts on it, and the run summary flags it - someone else can
+own the same token, so check on the Companies page that the adverts really are that
+company's. Detection never overwrites a feed you set by hand.
+
+If a feed cannot be read, the company's careers page is read instead and the run is marked
+with an issue. Clear the token to go back to the careers page for good.
+
+```json
+"Ats": {
+  "Enabled": true,
+  "DetectAutomatically": true,
+  "MaxDetectionsPerRun": 5,
+  "RecheckAfterDays": 14,
+  "MaxDescriptionChars": 20000
+}
+```
+
+These are published APIs meant for programmatic use, so like the Adzuna board they are called
+directly rather than through the careers-page fetcher and its `robots.txt` gate. Boards hosted
+in Greenhouse's or Lever's EU data centres use different API hosts and are not supported yet.
+
+### No-response rule
+
+An application still at `Applied` or `Acknowledged` with no activity for 21 days is moved to
+`NoResponse` by the evening email check, with a history row marked *no-response rule*.
+Activity means the application date, the last related email, or the last status change,
+whichever is latest. An acknowledgement does not stop the clock - it is usually an
+auto-reply.
+
+`NoResponse` is not final: the email check keeps matching mail against these applications,
+so a late interview invitation or rejection still lands. The rule runs even with no mailbox
+configured.
+
+```json
+"Applications": {
+  "NoResponseAfterDays": 21
+}
+```
+
+Set it to `0` to turn the rule off.
+
 ### Email (read-only)
 
 Generic IMAP via MailKit. The folder is opened with `FolderAccess.ReadOnly`, so the server
@@ -499,6 +570,7 @@ they are cheap to test.
 | `IPageFetcher` | `PoliteHttpPageFetcher` → `PlaywrightPageFetcher` | — |
 | `IEmailProvider` | `ImapEmailProvider` | new class + `EmailProviderKind` value |
 | `IJobBoardProvider` | `AdzunaJobBoardProvider` | new class + options section |
+| `IAtsFeed` | `GreenhouseFeed`, `LeverFeed`, `AshbyFeed`, `WorkableFeed` | new class + `AtsKind` value |
 | `ICvTextExtractor` | `CvTextExtractor` (PdfPig / OpenXml) | — |
 
 ### Database notes
@@ -518,7 +590,8 @@ filters in the database rather than forcing client-side evaluation.
 | Symptom | Cause and fix |
 |---|---|
 | The app exits immediately with *cannot start because its configuration is not valid* | Read the lines underneath it — each names the exact setting and how to fix it. This is by design: see [Fail-fast configuration](#fail-fast-configuration). |
-| Morning scan reads 0 pages | Companies need `Status = USE` **and** a careers URL. The dashboard flags any that are missing one. |
+| Morning scan reads 0 pages | Companies need `Status = USE` **and** a careers URL or a job-board feed. The dashboard flags any that have neither. |
+| A company reports *job-board feed could not be read* | The service or token is wrong, or the company has moved service. Check it on the Companies page, or clear the token to go back to the careers page. |
 | Nothing gets scored | No CV uploaded, or the companies are `REVIEW`/`NOT_USE`. Only `USE` companies are scored. |
 | Discovery finds nothing | Check the board is `Enabled` with valid keys, and that at least one industry is active. |
 | A careers page yields no jobs | Likely JavaScript-rendered. Install the Playwright browsers, or check the log for a `robots.txt disallows` line. |

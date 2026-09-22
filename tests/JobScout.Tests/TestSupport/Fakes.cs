@@ -1,4 +1,5 @@
 using JobScout.Core.Abstractions;
+using JobScout.Core.Enums;
 using JobScout.Core.Models;
 
 namespace JobScout.Tests.TestSupport;
@@ -121,5 +122,28 @@ public sealed class FakeJobBoardProvider(string name = "FakeBoard") : IJobBoardP
     {
         Requests.Add(request);
         return Task.FromResult<IReadOnlyList<BoardJobResult>?>(FailQueries ? null : Results);
+    }
+}
+
+/// <summary>A job-board feed serving canned boards by token. A token it does not know comes
+/// back null, which is what a real service answers with a 404.</summary>
+public sealed class FakeAtsFeed(AtsKind kind) : IAtsFeed
+{
+    public AtsKind Kind { get; } = kind;
+
+    public Dictionary<string, List<ExtractedJob>> Boards { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> Requested { get; } = [];
+
+    /// <summary>Set to make every read fail, as an outage would.</summary>
+    public bool Fail { get; set; }
+
+    public Task<IReadOnlyList<ExtractedJob>?> FetchAsync(string token, CancellationToken ct = default)
+    {
+        Requested.Add(token);
+
+        if (Fail || !Boards.TryGetValue(token, out var jobs))
+            return Task.FromResult<IReadOnlyList<ExtractedJob>?>(null);
+
+        return Task.FromResult<IReadOnlyList<ExtractedJob>?>(jobs);
     }
 }

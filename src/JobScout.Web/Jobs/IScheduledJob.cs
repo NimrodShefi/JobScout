@@ -37,7 +37,7 @@ public static class JobCatalogue
             "Read every USE company's careers page, save the new listings, then score anything unscored."),
 
         new(EmailCheckJob.Key, typeof(EmailCheckJob), "Email check",
-            "Read new mail and update application statuses. Read-only: nothing is ever sent, moved or deleted."),
+            "Read new mail and update application statuses, then mark long-silent applications as no response. Read-only: nothing is ever sent, moved or deleted."),
 
         new(DiscoveryJob.Key, typeof(DiscoveryJob), "Discovery",
             "Query every enabled job board for each active industry and city. New companies land in REVIEW, unscored."),
